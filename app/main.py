@@ -11,8 +11,11 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="ManaDwar - Access Control API",
-    description="RFID vehicle access control, OTP visitor entry, delivery approval, and maintenance/complaints.",
-    version="4.0.0",
+    description=(
+        "RFID vehicle access control, OTP visitor entry, delivery approval, "
+        "and maintenance/complaints for a smart-community gate system."
+    ),
+    version="4.1.0",
 )
 app.include_router(rfid.router)
 app.include_router(visitors.router)
