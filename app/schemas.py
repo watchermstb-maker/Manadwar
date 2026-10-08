@@ -6,6 +6,8 @@ from pydantic import BaseModel, ConfigDict
 from .models import (
     AccessResult,
     ApprovalMode,
+    BillStatus,
+    ComplaintStatus,
     CredentialScope,
     CredentialStatus,
     CredentialType,
@@ -152,3 +154,56 @@ class DeliveryOut(BaseModel):
     status: DeliveryStatus
     requested_at: datetime
     decided_at: Optional[datetime] = None
+
+
+# ---------------------------------------------------------------------------
+# Maintenance: bills + complaints
+# ---------------------------------------------------------------------------
+
+class MaintenanceBillCreate(BaseModel):
+    resident_id: int
+    billing_month: str  # "YYYY-MM"
+    amount_due: float
+    due_date: datetime
+
+
+class MaintenanceBillPay(BaseModel):
+    payment_reference: Optional[str] = None
+
+
+class MaintenanceBillOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    resident_id: int
+    billing_month: str
+    amount_due: float
+    due_date: datetime
+    status: BillStatus
+    paid_at: Optional[datetime] = None
+    payment_reference: Optional[str] = None
+    created_at: datetime
+
+
+class ComplaintCreate(BaseModel):
+    resident_id: int
+    category: Optional[str] = None
+    description: str
+
+
+class ComplaintStatusUpdate(BaseModel):
+    status: ComplaintStatus
+    resolution_notes: Optional[str] = None
+
+
+class ComplaintOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    resident_id: int
+    category: Optional[str] = None
+    description: str
+    status: ComplaintStatus
+    raised_at: datetime
+    resolved_at: Optional[datetime] = None
+    resolution_notes: Optional[str] = None

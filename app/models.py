@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime
+from sqlalchemy import Boolean, Column, DateTime, Float
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy import ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
@@ -50,6 +50,18 @@ class DeliveryStatus(str, enum.Enum):
     PENDING = "PENDING"
     APPROVED = "APPROVED"
     DENIED = "DENIED"
+
+
+class BillStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    PAID = "PAID"
+    OVERDUE = "OVERDUE"
+
+
+class ComplaintStatus(str, enum.Enum):
+    OPEN = "OPEN"
+    IN_PROGRESS = "IN_PROGRESS"
+    RESOLVED = "RESOLVED"
 
 
 class Direction(str, enum.Enum):
@@ -143,6 +155,37 @@ class Delivery(Base):
     decided_at = Column(DateTime, nullable=True)
 
     host_resident = relationship("Resident")
+
+
+class MaintenanceBill(Base):
+    __tablename__ = "maintenance_bills"
+
+    id = Column(Integer, primary_key=True, index=True)
+    resident_id = Column(Integer, ForeignKey("residents.id"), nullable=False)
+    billing_month = Column(String, nullable=False)  # "YYYY-MM"
+    amount_due = Column(Float, nullable=False)
+    due_date = Column(DateTime, nullable=False)
+    status = Column(SAEnum(BillStatus), nullable=False, default=BillStatus.PENDING)
+    paid_at = Column(DateTime, nullable=True)
+    payment_reference = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    resident = relationship("Resident")
+
+
+class Complaint(Base):
+    __tablename__ = "complaints"
+
+    id = Column(Integer, primary_key=True, index=True)
+    resident_id = Column(Integer, ForeignKey("residents.id"), nullable=False)
+    category = Column(String, nullable=True)
+    description = Column(String, nullable=False)
+    status = Column(SAEnum(ComplaintStatus), nullable=False, default=ComplaintStatus.OPEN)
+    raised_at = Column(DateTime, default=datetime.utcnow)
+    resolved_at = Column(DateTime, nullable=True)
+    resolution_notes = Column(String, nullable=True)
+
+    resident = relationship("Resident")
 
 
 class EntryLog(Base):

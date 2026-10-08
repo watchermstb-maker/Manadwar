@@ -1,7 +1,7 @@
-# ManaDwar — Access Control Backend (Phase 3: + Delivery Approval)
+# ManaDwar — Access Control Backend (Phase 4: + Maintenance)
 
 A prototype smart-community gate access system: RFID vehicle entry, OTP
-visitor entry, and delivery approval (auto or manual).
+visitor entry, delivery approval, and maintenance (bills + complaints).
 
 ## Setup
 
@@ -21,14 +21,39 @@ uvicorn app.main:app --reload
 - Demo UI (Vehicle + Visitor only so far): http://127.0.0.1:8000/
 - Swagger docs: http://127.0.0.1:8000/docs
 
-## Trying delivery approval
+## If you're re-running a newer version over an older checkout
 
-- `POST /deliveries` with `"approval_mode": "AUTO"` → instantly approved
-  and logged.
-- `POST /deliveries` with `"approval_mode": "MANUAL"` → stays `PENDING`
-  until `POST /deliveries/{id}/decision` with `{"approve": true}` or
-  `{"approve": false}`.
-- `GET /deliveries` to see all requests.
+`Base.metadata.create_all()` only ever **creates missing tables** — it
+never alters an existing table's columns. If you're updating from an
+older copy of this project, delete `manadwar.db` first, then re-seed:
 
-Note: the demo UI at `/app/` does not have a Delivery tab yet — delivery
-approval is API-only in this phase. Use `/docs` to try it.
+```bash
+del manadwar.db      # Windows
+# rm manadwar.db     # macOS/Linux
+python -m app.seed
+uvicorn app.main:app --reload
+```
+
+## Trying maintenance
+
+- `POST /maintenance/bills` to create a bill;
+  `POST /maintenance/bills/{id}/pay` to pay it.
+- `POST /complaints` to raise one;
+  `POST /complaints/{id}/status` to move it through
+  OPEN → IN_PROGRESS → RESOLVED.
+- Bills past their due date are flipped to `OVERDUE` automatically the
+  next time `GET /maintenance/bills` is called (no scheduler — it's
+  checked lazily, at read time).
+
+Note: the demo UI at `/app/` does not have Delivery or Maintenance tabs
+yet — those are API-only in this phase. Use `/docs` to try them.
+
+## What this project intentionally does NOT include
+
+- No authentication/login.
+- No database migrations tool — delete `manadwar.db` to apply schema
+  changes.
+- No real SMS gateway — OTPs are returned directly in the response.
+- No real payment gateway — "paying" a bill just records a reference
+  string.
+- No real FASTag/NETC bank or toll integration.
