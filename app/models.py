@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime
+from sqlalchemy import Boolean, Column, DateTime
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy import ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
@@ -23,6 +23,21 @@ class CredentialStatus(str, enum.Enum):
     ACTIVE = "ACTIVE"
     BLOCKED = "BLOCKED"
     EXPIRED = "EXPIRED"
+
+
+class CredentialScope(str, enum.Enum):
+    RESIDENT = "RESIDENT"
+    VISITOR = "VISITOR"
+
+
+class VisitType(str, enum.Enum):
+    SHORT_TERM = "SHORT_TERM"
+    LONG_TERM = "LONG_TERM"
+
+
+class EntryMethod(str, enum.Enum):
+    RFID = "RFID"
+    OTP = "OTP"
 
 
 class Direction(str, enum.Enum):
@@ -58,6 +73,30 @@ class Vehicle(Base):
     credentials = relationship("VehicleCredential", back_populates="vehicle")
 
 
+class Visitor(Base):
+    __tablename__ = "visitors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    phone = Column(String, nullable=False)
+    host_resident_id = Column(Integer, ForeignKey("residents.id"), nullable=False)
+    visit_type = Column(SAEnum(VisitType), nullable=False)
+    purpose = Column(String, nullable=True)
+    valid_from = Column(DateTime, default=datetime.utcnow)
+    valid_until = Column(DateTime, nullable=False)
+    vehicle_number = Column(String, nullable=True)
+    otp_code = Column(String, nullable=False)
+    otp_expires_at = Column(DateTime, nullable=False)
+    otp_verified = Column(Boolean, nullable=False, default=False)
+    otp_verified_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    host_resident = relationship("Resident")
+    vehicle_credential = relationship(
+        "VehicleCredential", back_populates="visitor", uselist=False
+    )
+
+
 class VehicleCredential(Base):
     __tablename__ = "vehicle_credentials"
 
@@ -66,11 +105,15 @@ class VehicleCredential(Base):
     credential_type = Column(SAEnum(CredentialType), nullable=False)
     credential_value = Column(String, nullable=False, unique=True, index=True)
     status = Column(SAEnum(CredentialStatus), nullable=False, default=CredentialStatus.ACTIVE)
-    # NULL = permanent (resident credentials never expire on their own).
+    credential_scope = Column(
+        SAEnum(CredentialScope), nullable=False, default=CredentialScope.RESIDENT
+    )
     expires_at = Column(DateTime, nullable=True)
+    visitor_id = Column(Integer, ForeignKey("visitors.id"), nullable=True)
     issued_date = Column(DateTime, default=datetime.utcnow)
 
     vehicle = relationship("Vehicle", back_populates="credentials")
+    visitor = relationship("Visitor", back_populates="vehicle_credential")
 
 
 class EntryLog(Base):
@@ -79,6 +122,8 @@ class EntryLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     vehicle_id = Column(Integer, ForeignKey("vehicles.id"), nullable=True)
     credential_id = Column(Integer, ForeignKey("vehicle_credentials.id"), nullable=True)
+    visitor_id = Column(Integer, ForeignKey("visitors.id"), nullable=True)
+    entry_method = Column(SAEnum(EntryMethod), nullable=False, default=EntryMethod.RFID)
     credential_value = Column(String, nullable=False)
     gate_name = Column(String, nullable=False, default="MAIN_GATE")
     direction = Column(SAEnum(Direction), nullable=False, default=Direction.IN)

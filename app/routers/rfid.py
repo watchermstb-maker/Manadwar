@@ -20,6 +20,7 @@ def verify_rfid(payload: schemas.VerifyRFIDRequest, db: Session = Depends(get_db
     if credential is None:
         utils.log_attempt(
             db,
+            entry_method=models.EntryMethod.RFID,
             credential_value=payload.credential_value,
             gate_name=payload.gate_name,
             direction=payload.direction,
@@ -40,6 +41,7 @@ def verify_rfid(payload: schemas.VerifyRFIDRequest, db: Session = Depends(get_db
             db,
             vehicle_id=vehicle.id if vehicle else None,
             credential_id=credential.id,
+            entry_method=models.EntryMethod.RFID,
             credential_value=payload.credential_value,
             gate_name=payload.gate_name,
             direction=payload.direction,
@@ -55,6 +57,7 @@ def verify_rfid(payload: schemas.VerifyRFIDRequest, db: Session = Depends(get_db
         db,
         vehicle_id=vehicle.id if vehicle else None,
         credential_id=credential.id,
+        entry_method=models.EntryMethod.RFID,
         credential_value=payload.credential_value,
         gate_name=payload.gate_name,
         direction=payload.direction,

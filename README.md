@@ -1,7 +1,7 @@
-# ManaDwar — Access Control Backend (Phase 1: RFID Vehicle Access)
+# ManaDwar — Access Control Backend (Phase 2: + OTP Visitor Entry)
 
-A prototype smart-community gate access system. This first phase covers
-RFID/FASTag vehicle entry only.
+A prototype smart-community gate access system: RFID vehicle entry plus
+OTP-based visitor entry.
 
 ## Setup
 
@@ -20,11 +20,9 @@ uvicorn app.main:app --reload
 
 Swagger docs: http://127.0.0.1:8000/docs
 
-## Seeded demo data
+## Trying it
 
-- Residents: Arun Kumar (A-101), Priya Menon (B-204)
-- Vehicles: `KA-01-AB-1234` (CAR), `KA-05-CD-5678` (BIKE)
-- Credentials: `TEST-RFID-001` (ACTIVE), `TEST-FASTAG-002` (ACTIVE),
-  `BLOCKED-RFID-999` (BLOCKED)
-
-Try `POST /verify-rfid` with `{"credential_value": "TEST-RFID-001"}`.
+- **Vehicle**: `POST /verify-rfid` with `{"credential_value": "TEST-RFID-001"}`.
+- **Visitor**: `POST /visitors` to register (get back an `otp_code`), then
+  `POST /verify-otp` with that code. A second attempt with the same code
+  is denied as already-used.
