@@ -200,8 +200,8 @@
     font-size: 0.72rem;
     font-weight: 600;
   }
-  .badge.granted, .badge.approved, .badge.paid, .badge.resolved { background: var(--granted-dim); color: var(--granted); }
-  .badge.denied, .badge.overdue { background: var(--denied-dim); color: var(--denied); }
+  .badge.granted, .badge.approved, .badge.paid, .badge.resolved, .badge.active { background: var(--granted-dim); color: var(--granted); }
+  .badge.denied, .badge.overdue, .badge.blocked, .badge.expired { background: var(--denied-dim); color: var(--denied); }
   .badge.pending, .badge.open { background: var(--idle-dim); color: var(--idle); }
   .badge.in_progress { background: var(--info-dim); color: var(--info); }
 
@@ -249,6 +249,7 @@
       <button class="tab-btn active" id="tab-vehicle" data-panel="panel-vehicle">Vehicle</button>
       <button class="tab-btn" id="tab-visitor" data-panel="panel-visitor">Visitor</button>
       <button class="tab-btn" id="tab-delivery" data-panel="panel-delivery">Delivery</button>
+      <button class="tab-btn" id="tab-staff" data-panel="panel-staff">Staff</button>
     </div>
 
     <div class="status-screen state-idle" id="status-screen">
@@ -392,6 +393,20 @@
         </tbody>
       </table>
     </div>
+
+    <!-- ---- Staff panel ---- -->
+    <div class="panel" id="panel-staff">
+      <label for="staff-credential-input">Staff ID-card code</label>
+      <input type="text" id="staff-credential-input" placeholder="e.g. TEST-STAFF-001" />
+
+      <label for="staff-direction">Direction</label>
+      <select id="staff-direction">
+        <option value="IN">IN</option>
+        <option value="OUT">OUT</option>
+      </select>
+
+      <button class="action" id="btn-verify-staff">Verify Staff</button>
+    </div>
   </div>
 
   <!-- ===================== MAINTENANCE CARD ===================== -->
@@ -459,6 +474,68 @@
         </tbody>
       </table>
     </div>
+  </div>
+
+  <!-- ===================== STAFF DIRECTORY CARD ===================== -->
+  <div class="card">
+    <h2 class="section-title">General Staff</h2>
+    <p style="color:var(--muted);font-size:0.85rem;margin-top:-8px;margin-bottom:14px;">
+      House help, drivers, security, and other recurring staff. Aadhaar is hashed on
+      registration -- only the last 4 digits are ever stored or shown.
+    </p>
+
+    <div class="field-grid">
+      <div>
+        <label for="staffreg-name">Name</label>
+        <input type="text" id="staffreg-name" placeholder="Full name" />
+      </div>
+      <div>
+        <label for="staffreg-phone">Phone</label>
+        <input type="text" id="staffreg-phone" placeholder="10-digit number" />
+      </div>
+    </div>
+
+    <div class="field-grid">
+      <div>
+        <label for="staffreg-role">Role</label>
+        <select id="staffreg-role">
+          <option value="MAID">Maid</option>
+          <option value="DRIVER">Driver</option>
+          <option value="SECURITY">Security</option>
+          <option value="COOK">Cook</option>
+          <option value="GARDENER">Gardener</option>
+          <option value="OTHER">Other</option>
+        </select>
+      </div>
+      <div>
+        <label for="staffreg-employer">Employed by (optional)</label>
+        <select id="staffreg-employer"></select>
+      </div>
+    </div>
+
+    <div class="field-grid">
+      <div>
+        <label for="staffreg-aadhaar">Aadhaar number (12 digits)</label>
+        <input type="text" id="staffreg-aadhaar" placeholder="e.g. 123456789012" maxlength="14" />
+      </div>
+      <div>
+        <label for="staffreg-expires">Contract end date (optional)</label>
+        <input type="date" id="staffreg-expires" />
+      </div>
+    </div>
+
+    <button class="action" id="btn-register-staff">Register Staff</button>
+
+    <div class="inline-result hidden" id="staffreg-result"></div>
+
+    <table>
+      <thead>
+        <tr><th>#</th><th>Name</th><th>Role</th><th>Employed by</th><th>Aadhaar</th><th>Credential</th><th>Status</th><th>Action</th></tr>
+      </thead>
+      <tbody id="staff-body">
+        <tr class="empty-row"><td colspan="8">No staff registered yet.</td></tr>
+      </tbody>
+    </table>
   </div>
 
 </div>
@@ -533,9 +610,9 @@
   }
 
   wireTabs(
-    [document.getElementById("tab-vehicle"), document.getElementById("tab-visitor"), document.getElementById("tab-delivery")],
+    [document.getElementById("tab-vehicle"), document.getElementById("tab-visitor"), document.getElementById("tab-delivery"), document.getElementById("tab-staff")],
     "data-panel",
-    ["panel-vehicle", "panel-visitor", "panel-delivery"]
+    ["panel-vehicle", "panel-visitor", "panel-delivery", "panel-staff"]
   );
 
   wireTabs(
@@ -592,6 +669,24 @@
         sel.appendChild(opt);
       });
     });
+
+    // Staff employer dropdown is optional (security guards are often
+    // society-employed, not tied to one resident), so it gets a blank
+    // "none" option the others don't.
+    const employerSel = document.getElementById("staffreg-employer");
+    if (employerSel) {
+      employerSel.innerHTML = "";
+      const noneOpt = document.createElement("option");
+      noneOpt.value = "";
+      noneOpt.textContent = "— No specific resident (society-employed) —";
+      employerSel.appendChild(noneOpt);
+      residents.forEach(function (r) {
+        const opt = document.createElement("option");
+        opt.value = r.id;
+        opt.textContent = r.name + " (" + r.apartment_no + ")";
+        employerSel.appendChild(opt);
+      });
+    }
   }
 
   function residentLabel(id) {
@@ -623,6 +718,30 @@
     const data = result.data;
     if (data.access === "GRANTED") {
       setStatus("granted", "ACCESS GRANTED", (data.vehicle_number || "") + (data.resident_name ? " — " + data.resident_name : ""));
+    } else {
+      setStatus("denied", "ACCESS DENIED", data.message || "");
+    }
+  });
+
+  // -------------------------------------------------------------
+  // Staff tab: verify staff ID-card credential
+  // -------------------------------------------------------------
+  document.getElementById("btn-verify-staff").addEventListener("click", async function () {
+    const value = document.getElementById("staff-credential-input").value.trim();
+    const direction = document.getElementById("staff-direction").value;
+    if (!value) {
+      setStatus("denied", "NO CREDENTIAL", "Enter a staff ID-card code first.");
+      return;
+    }
+    setStatus("idle", "CHECKING...", "");
+    const result = await postJSON("/verify-staff", { credential_value: value, gate_name: "MAIN_GATE", direction: direction });
+    if (!result.ok) {
+      setStatus("denied", "ERROR", result.error);
+      return;
+    }
+    const data = result.data;
+    if (data.access === "GRANTED") {
+      setStatus("granted", "ACCESS GRANTED", (data.staff_name || "") + (data.role ? " — " + data.role : "") + (data.employer_name ? " (" + data.employer_name + ")" : ""));
     } else {
       setStatus("denied", "ACCESS DENIED", data.message || "");
     }
@@ -980,6 +1099,113 @@
   }
 
   // -------------------------------------------------------------
+  // General Staff
+  // -------------------------------------------------------------
+  document.getElementById("btn-register-staff").addEventListener("click", async function () {
+    const resultBox = document.getElementById("staffreg-result");
+    resultBox.classList.add("hidden");
+
+    const name = document.getElementById("staffreg-name").value.trim();
+    const phone = document.getElementById("staffreg-phone").value.trim();
+    const role = document.getElementById("staffreg-role").value;
+    const employerSelect = document.getElementById("staffreg-employer");
+    const employerId = employerSelect.value ? parseInt(employerSelect.value, 10) : null;
+    const aadhaarRaw = document.getElementById("staffreg-aadhaar").value.trim();
+    const expiresRaw = document.getElementById("staffreg-expires").value;
+
+    if (!name || !phone || !aadhaarRaw) {
+      resultBox.classList.remove("hidden");
+      resultBox.innerHTML = "Please fill in name, phone, and Aadhaar number.";
+      return;
+    }
+
+    const payload = {
+      name: name,
+      phone: phone,
+      role: role,
+      employed_by_resident_id: employerId,
+      aadhaar_number: aadhaarRaw,
+    };
+    if (expiresRaw) {
+      payload.expires_at = new Date(expiresRaw).toISOString();
+    }
+
+    const result = await postJSON("/staff", payload);
+    resultBox.classList.remove("hidden");
+    if (!result.ok) {
+      resultBox.innerHTML = "Registration failed: " + result.error;
+      return;
+    }
+
+    const member = result.data;
+    resultBox.innerHTML =
+      "Staff member <strong>" + member.name + "</strong> registered.<br/>" +
+      "Their gate ID-card code (Aadhaar stored only as last 4 digits: " + member.aadhaar_last4 + "):<br/>" +
+      '<span class="otp-code">' + member.credential_value + "</span>";
+
+    document.getElementById("staffreg-name").value = "";
+    document.getElementById("staffreg-phone").value = "";
+    document.getElementById("staffreg-aadhaar").value = "";
+    document.getElementById("staffreg-expires").value = "";
+
+    await loadStaffDirectory();
+  });
+
+  async function loadStaffDirectory() {
+    const body = document.getElementById("staff-body");
+    const result = await getJSON("/staff");
+    if (!result.ok) {
+      body.innerHTML = '<tr class="empty-row"><td colspan="8">Could not load staff: ' + result.error + "</td></tr>";
+      return;
+    }
+    const staffList = result.data;
+    if (staffList.length === 0) {
+      body.innerHTML = '<tr class="empty-row"><td colspan="8">No staff registered yet.</td></tr>';
+      return;
+    }
+    body.innerHTML = staffList.map(function (s) {
+      const employer = s.employed_by_resident_id ? residentLabel(s.employed_by_resident_id) : "— Society —";
+      const action = s.status === "BLOCKED"
+        ? '<button class="approve" data-unblock-id="' + s.id + '">Unblock</button>'
+        : '<button class="deny" data-block-id="' + s.id + '">Block</button>';
+      return "<tr>" +
+        "<td>" + s.id + "</td>" +
+        "<td>" + s.name + "</td>" +
+        "<td>" + s.role + "</td>" +
+        "<td>" + employer + "</td>" +
+        '<td class="mono">XXXX-XXXX-' + s.aadhaar_last4 + "</td>" +
+        '<td class="mono">' + s.credential_value + "</td>" +
+        "<td>" + badge(s.status) + "</td>" +
+        '<td class="row-actions">' + action + "</td>" +
+      "</tr>";
+    }).join("");
+
+    body.querySelectorAll("button[data-block-id]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        const id = btn.getAttribute("data-block-id");
+        const result = await postJSON("/staff/" + id + "/status", { status: "BLOCKED" });
+        if (!result.ok) {
+          alert("Could not block staff member: " + result.error);
+          return;
+        }
+        await loadStaffDirectory();
+      });
+    });
+
+    body.querySelectorAll("button[data-unblock-id]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        const id = btn.getAttribute("data-unblock-id");
+        const result = await postJSON("/staff/" + id + "/status", { status: "ACTIVE" });
+        if (!result.ok) {
+          alert("Could not unblock staff member: " + result.error);
+          return;
+        }
+        await loadStaffDirectory();
+      });
+    });
+  }
+
+  // -------------------------------------------------------------
   // Initial load
   // -------------------------------------------------------------
   async function init() {
@@ -987,6 +1213,7 @@
     await loadPendingDeliveries();
     await loadBills();
     await loadComplaints();
+    await loadStaffDirectory();
   }
 
   init();

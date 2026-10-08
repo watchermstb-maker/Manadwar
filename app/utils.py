@@ -1,3 +1,4 @@
+import hashlib
 import random
 
 from . import models
@@ -25,6 +26,7 @@ def log_attempt(
     direction,
     access,
     delivery_id=None,
+    staff_id=None,
 ):
     """Record one gate-entry attempt (granted or denied) to the EntryLog."""
     entry = models.EntryLog(
@@ -32,6 +34,7 @@ def log_attempt(
         credential_id=credential_id,
         visitor_id=visitor_id,
         delivery_id=delivery_id,
+        staff_id=staff_id,
         entry_method=entry_method,
         credential_value=credential_value,
         gate_name=gate_name,
@@ -42,3 +45,18 @@ def log_attempt(
     db.commit()
     db.refresh(entry)
     return entry
+
+
+def hash_aadhaar(aadhaar_number: str):
+    """Hash an Aadhaar (government ID) number for storage.
+
+    Returns (hash_hex, last4). The raw number is never persisted anywhere --
+    only this SHA-256 hash (for exact-match dedup lookups, so the same
+    person can't be registered as staff twice) and the last 4 digits (for
+    human display/verification, the standard masking convention for Indian
+    ID numbers) are stored.
+    """
+    digits = "".join(ch for ch in aadhaar_number if ch.isdigit())
+    hash_hex = hashlib.sha256(digits.encode("utf-8")).hexdigest()
+    last4 = digits[-4:] if len(digits) >= 4 else digits
+    return hash_hex, last4

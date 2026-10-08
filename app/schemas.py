@@ -14,6 +14,8 @@ from .models import (
     DeliveryStatus,
     Direction,
     EntryMethod,
+    StaffRole,
+    StaffStatus,
     VehicleType,
     VisitType,
 )
@@ -72,6 +74,7 @@ class EntryLogOut(BaseModel):
     credential_id: Optional[int] = None
     visitor_id: Optional[int] = None
     delivery_id: Optional[int] = None
+    staff_id: Optional[int] = None
     entry_method: EntryMethod
     credential_value: str
     gate_name: str
@@ -207,3 +210,51 @@ class ComplaintOut(BaseModel):
     raised_at: datetime
     resolved_at: Optional[datetime] = None
     resolution_notes: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# General Staff (house help / driver / security / cook / gardener)
+# ---------------------------------------------------------------------------
+
+class StaffCreate(BaseModel):
+    name: str
+    phone: str
+    role: StaffRole
+    employed_by_resident_id: Optional[int] = None
+    # 12-digit Aadhaar number. Accepted here only to be hashed immediately --
+    # it is never persisted in plaintext and is never echoed back by the API.
+    aadhaar_number: str
+    expires_at: Optional[datetime] = None  # NULL = permanent staff
+
+
+class StaffStatusUpdate(BaseModel):
+    status: StaffStatus
+
+
+class StaffOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    phone: str
+    role: StaffRole
+    employed_by_resident_id: Optional[int] = None
+    credential_value: str
+    aadhaar_last4: str
+    status: StaffStatus
+    expires_at: Optional[datetime] = None
+    created_at: datetime
+
+
+class VerifyStaffRequest(BaseModel):
+    credential_value: str
+    gate_name: str = "MAIN_GATE"
+    direction: Direction = Direction.IN
+
+
+class VerifyStaffResponse(BaseModel):
+    access: AccessResult
+    message: str
+    staff_name: Optional[str] = None
+    role: Optional[StaffRole] = None
+    employer_name: Optional[str] = None

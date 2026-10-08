@@ -1,7 +1,8 @@
 # ManaDwar — Access Control Backend
 
 A prototype smart-community gate access system: RFID/FASTag vehicle entry,
-OTP visitor entry, delivery approval, and maintenance (bills + complaints).
+OTP visitor entry, delivery approval, maintenance (bills + complaints), and
+general staff access (house help/driver/security).
 
 This is a **deliberately simple prototype**, not a production system: no
 authentication, no database migrations tool, no real SMS/payment gateway
@@ -19,9 +20,13 @@ integration. See "What this project intentionally does NOT include" below.
   auto-approved or pending manual approval; approve/deny pending ones.
 - **Maintenance**: create/pay maintenance bills (auto-flip to OVERDUE
   past due date), raise/track complaints (OPEN → IN_PROGRESS → RESOLVED).
+- **General staff**: register house help/drivers/security/cooks/gardeners
+  with a gate ID-card credential; Aadhaar is hashed on registration (only
+  the last 4 digits are ever stored or shown); verify at the gate; block/
+  unblock; optional expiry for temporary/contract staff.
 - **Demo gate-terminal UI**: a single-page dark "terminal" frontend
-  covering all of the above — Vehicle, Visitor, and Delivery tabs, plus
-  a Maintenance card with Bills and Complaints sub-tabs.
+  covering all of the above — Vehicle, Visitor, Delivery, and Staff tabs,
+  plus Maintenance and Staff Directory cards.
 
 ## Setup
 
@@ -64,6 +69,9 @@ uvicorn app.main:app --reload
   - `TEST-RFID-001` — ACTIVE (Arun's car)
   - `TEST-FASTAG-002` — ACTIVE (Priya's bike)
   - `BLOCKED-RFID-999` — BLOCKED (Arun's car, for testing denial)
+- Staff: Lakshmi (MAID, employed by Arun) `TEST-STAFF-001` — ACTIVE;
+  Mohan (SECURITY, society-employed) `TEST-STAFF-002` — ACTIVE;
+  Ravi (DRIVER, employed by Priya) `BLOCKED-STAFF-999` — BLOCKED
 
 ## Trying each feature
 
@@ -84,6 +92,12 @@ until `POST /deliveries/{id}/decision`.
 one, `POST /complaints/{id}/status` to move it through
 OPEN → IN_PROGRESS → RESOLVED.
 
+**General staff** — `POST /staff` with a name, role, optional employing
+resident, and a 12-digit `aadhaar_number` (hashed immediately, never
+stored or returned raw) → get back an auto-generated `credential_value`
+(e.g. `STAFF-A1B2C3D4`); `POST /verify-staff` with that code → granted;
+`POST /staff/{id}/status` with `{"status": "BLOCKED"}` to revoke access.
+
 All of the above also works through the demo UI at `/app/`.
 
 ## What this project intentionally does NOT include
@@ -103,6 +117,10 @@ access-control logic itself:
   ever read or stored.
 - No production security hardening (rate limiting, HTTPS enforcement,
   input sanitization beyond Pydantic's validation, etc.)
+- No raw Aadhaar storage — staff registration hashes the Aadhaar number
+  (SHA-256) immediately and only persists that hash plus the last 4
+  digits; the full number is never written to the database or returned
+  by any API response.
 
 ## Project structure
 
@@ -120,6 +138,7 @@ manadwar-backend/
       visitors.py        Visitor registration + /verify-otp
       deliveries.py      Delivery requests + approval decisions
       maintenance.py     Maintenance bills + complaints
+      staff.py           General staff registration + /verify-staff
     static/
       index.html         Demo gate-terminal frontend (vanilla JS)
 ```

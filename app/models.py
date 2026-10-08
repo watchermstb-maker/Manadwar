@@ -39,6 +39,7 @@ class EntryMethod(str, enum.Enum):
     RFID = "RFID"
     OTP = "OTP"
     DELIVERY = "DELIVERY"
+    STAFF = "STAFF"
 
 
 class ApprovalMode(str, enum.Enum):
@@ -62,6 +63,21 @@ class ComplaintStatus(str, enum.Enum):
     OPEN = "OPEN"
     IN_PROGRESS = "IN_PROGRESS"
     RESOLVED = "RESOLVED"
+
+
+class StaffRole(str, enum.Enum):
+    MAID = "MAID"
+    DRIVER = "DRIVER"
+    SECURITY = "SECURITY"
+    COOK = "COOK"
+    GARDENER = "GARDENER"
+    OTHER = "OTHER"
+
+
+class StaffStatus(str, enum.Enum):
+    ACTIVE = "ACTIVE"
+    BLOCKED = "BLOCKED"
+    EXPIRED = "EXPIRED"
 
 
 class Direction(str, enum.Enum):
@@ -188,6 +204,33 @@ class Complaint(Base):
     resident = relationship("Resident")
 
 
+class Staff(Base):
+    __tablename__ = "staff"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    phone = Column(String, nullable=False)
+    role = Column(SAEnum(StaffRole), nullable=False)
+    # Nullable: security guards are typically employed by the society itself,
+    # not by one resident. House help / drivers / cooks / gardeners are
+    # usually employed by a specific resident.
+    employed_by_resident_id = Column(Integer, ForeignKey("residents.id"), nullable=True)
+    # Aadhaar (government ID) is never stored in plaintext: only a SHA-256
+    # hash (for exact-match dedup lookups) and the last 4 digits (for human
+    # display/verification) are persisted. The raw number is discarded by
+    # the API layer immediately after hashing and is never returned by any
+    # response.
+    aadhaar_hash = Column(String, nullable=False, unique=True, index=True)
+    aadhaar_last4 = Column(String(4), nullable=False)
+    credential_value = Column(String, nullable=False, unique=True, index=True)
+    status = Column(SAEnum(StaffStatus), nullable=False, default=StaffStatus.ACTIVE)
+    # NULL = permanent staff; set for a temporary/contract worker.
+    expires_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    employed_by = relationship("Resident")
+
+
 class EntryLog(Base):
     __tablename__ = "entry_logs"
 
@@ -196,6 +239,7 @@ class EntryLog(Base):
     credential_id = Column(Integer, ForeignKey("vehicle_credentials.id"), nullable=True)
     visitor_id = Column(Integer, ForeignKey("visitors.id"), nullable=True)
     delivery_id = Column(Integer, ForeignKey("deliveries.id"), nullable=True)
+    staff_id = Column(Integer, ForeignKey("staff.id"), nullable=True)
     entry_method = Column(SAEnum(EntryMethod), nullable=False, default=EntryMethod.RFID)
     credential_value = Column(String, nullable=False)
     gate_name = Column(String, nullable=False, default="MAIN_GATE")

@@ -3,7 +3,18 @@
 Run with:  python -m app.seed
 """
 from .database import Base, SessionLocal, engine
-from .models import CredentialStatus, CredentialType, Resident, Vehicle, VehicleCredential, VehicleType
+from .models import (
+    CredentialStatus,
+    CredentialType,
+    Resident,
+    Staff,
+    StaffRole,
+    StaffStatus,
+    Vehicle,
+    VehicleCredential,
+    VehicleType,
+)
+from .utils import hash_aadhaar
 
 Base.metadata.create_all(bind=engine)
 
@@ -38,6 +49,33 @@ def seed():
             credential_value="BLOCKED-RFID-999", status=CredentialStatus.BLOCKED,
         )
         db.add_all([c1, c2, c3])
+        db.commit()
+
+        # Demo-only Aadhaar numbers -- fictional, 12 digits each, hashed
+        # immediately like any real registration would be.
+        maid_hash, maid_last4 = hash_aadhaar("111122223333")
+        security_hash, security_last4 = hash_aadhaar("444455556666")
+        driver_hash, driver_last4 = hash_aadhaar("777788889999")
+
+        s1 = Staff(
+            name="Lakshmi", phone="9876500010", role=StaffRole.MAID,
+            employed_by_resident_id=r1.id,
+            aadhaar_hash=maid_hash, aadhaar_last4=maid_last4,
+            credential_value="TEST-STAFF-001", status=StaffStatus.ACTIVE,
+        )
+        s2 = Staff(
+            name="Mohan", phone="9876500011", role=StaffRole.SECURITY,
+            employed_by_resident_id=None,
+            aadhaar_hash=security_hash, aadhaar_last4=security_last4,
+            credential_value="TEST-STAFF-002", status=StaffStatus.ACTIVE,
+        )
+        s3 = Staff(
+            name="Ravi", phone="9876500012", role=StaffRole.DRIVER,
+            employed_by_resident_id=r2.id,
+            aadhaar_hash=driver_hash, aadhaar_last4=driver_last4,
+            credential_value="BLOCKED-STAFF-999", status=StaffStatus.BLOCKED,
+        )
+        db.add_all([s1, s2, s3])
         db.commit()
 
         print("Seed complete.")
