@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ManaDwar — Gate Access Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #16181a;
+    --panel: #1e2123;
+    --well: #131516;
+    --border: #34393c;
+    --text: #ede9e1;
+    --muted: #8d9296;
+    --granted: #33c46b;
+    --granted-dim: #17331f;
+    --denied: #e5484d;
+    --denied-dim: #3a1718;
+    --idle: #e8a33d;
+    --idle-dim: #3a2d12;
+    --info: #5aa9e6;
+    --info-dim: #16293a;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "IBM Plex Sans", sans-serif;
+    padding: 24px;
+  }
+
+  .wrap { max-width: 980px; margin: 0 auto; }
+
+  header { margin-bottom: 20px; }
+  header h1 {
+    font-size: 1.6rem;
+    margin: 0 0 4px;
+    letter-spacing: 0.5px;
+  }
+  header p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .tab-btn {
+    background: var(--well);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .tab-btn.active {
+    color: var(--text);
+    border-color: var(--info);
+    background: var(--info-dim);
+  }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .status-screen {
+    background: var(--well);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px;
+    margin-bottom: 18px;
+    font-family: "IBM Plex Mono", monospace;
+  }
+  .status-screen.state-idle { border-color: var(--idle); background: var(--idle-dim); }
+  .status-screen.state-granted { border-color: var(--granted); background: var(--granted-dim); }
+  .status-screen.state-denied { border-color: var(--denied); background: var(--denied-dim); }
+
+  .status-light {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 8px;
+    background: var(--idle);
+  }
+  .state-granted .status-light { background: var(--granted); }
+  .state-denied .status-light { background: var(--denied); }
+
+  .status-message { font-size: 1rem; font-weight: 600; }
+  .status-detail { color: var(--muted); font-size: 0.85rem; margin-top: 4px; }
+
+  label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-bottom: 4px;
+    margin-top: 12px;
+  }
+  label:first-of-type { margin-top: 0; }
+
+  input, select, textarea {
+    width: 100%;
+    background: var(--well);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 9px 10px;
+    border-radius: 6px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.9rem;
+  }
+  input:focus, select:focus, textarea:focus { outline: 1px solid var(--info); }
+
+  button.action {
+    margin-top: 16px;
+    background: var(--info-dim);
+    border: 1px solid var(--info);
+    color: var(--text);
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+  button.action:hover { background: var(--info); color: #0b1620; }
+  button.action.secondary { border-color: var(--border); background: var(--well); }
+  button.action.secondary:hover { background: var(--border); color: var(--text); }
+
+  .segmented { display: flex; gap: 6px; margin-top: 0; }
+  .segmented button {
+    flex: 1;
+    background: var(--well);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+  .segmented button.active { color: var(--text); border-color: var(--idle); background: var(--idle-dim); }
+
+  .hidden { display: none !important; }
+
+  .inline-result {
+    margin-top: 14px;
+    padding: 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--well);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.85rem;
+  }
+  .inline-result .otp-code {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--idle);
+    letter-spacing: 2px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+    font-size: 0.82rem;
+  }
+  th, td {
+    border-bottom: 1px solid var(--border);
+    padding: 8px 6px;
+    text-align: left;
+  }
+  th { color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 0.72rem; }
+  td.mono { font-family: "IBM Plex Mono", monospace; }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+  .badge.granted, .badge.approved, .badge.paid, .badge.resolved, .badge.active { background: var(--granted-dim); color: var(--granted); }
+  .badge.denied, .badge.overdue, .badge.blocked, .badge.expired { background: var(--denied-dim); color: var(--denied); }
+  .badge.pending, .badge.open { background: var(--idle-dim); color: var(--idle); }
+  .badge.in_progress { background: var(--info-dim); color: var(--info); }
+
+  .row-actions { display: flex; gap: 6px; }
+  .row-actions button {
+    background: var(--well);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.78rem;
+  }
+  .row-actions button.approve { border-color: var(--granted); color: var(--granted); }
+  .row-actions button.deny { border-color: var(--denied); color: var(--denied); }
+
+  .empty-row td { color: var(--muted); font-style: italic; }
+
+  .section-title {
+    font-size: 1.1rem;
+    margin: 0 0 14px;
+  }
+
+  .mtabs { display: flex; gap: 8px; margin-bottom: 16px; }
+
+  .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+  @media (max-width: 640px) {
+    .field-grid { grid-template-columns: 1fr; }
+    body { padding: 14px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>ManaDwar</h1>
+    <p>Gate Access Terminal — demo console</p>
+  </header>
+
+  <!-- ===================== TERMINAL CARD ===================== -->
+  <div class="card">
+    <div class="tabs">
+      <button class="tab-btn active" id="tab-vehicle" data-panel="panel-vehicle">Vehicle</button>
+      <button class="tab-btn" id="tab-visitor" data-panel="panel-visitor">Visitor</button>
+      <button class="tab-btn" id="tab-delivery" data-panel="panel-delivery">Delivery</button>
+      <button class="tab-btn" id="tab-staff" data-panel="panel-staff">Staff</button>
+    </div>
+
+    <div class="status-screen state-idle" id="status-screen">
+      <div><span class="status-light"></span><span class="status-message" id="status-message">STANDING BY</span></div>
+      <div class="status-detail" id="status-detail">Present a credential, OTP, or delivery request to begin.</div>
+    </div>
+
+    <!-- ---- Vehicle panel ---- -->
+    <div class="panel active" id="panel-vehicle">
+      <label for="rfid-input">RFID / FASTag code</label>
+      <input type="text" id="rfid-input" placeholder="e.g. TEST-RFID-001" />
+
+      <label for="rfid-direction">Direction</label>
+      <select id="rfid-direction">
+        <option value="IN">IN</option>
+        <option value="OUT">OUT</option>
+      </select>
+
+      <button class="action" id="btn-verify-rfid">Verify Credential</button>
+    </div>
+
+    <!-- ---- Visitor panel ---- -->
+    <div class="panel" id="panel-visitor">
+      <div class="tabs">
+        <button class="tab-btn active" id="vtab-verify" data-vpanel="vpanel-verify">Verify OTP</button>
+        <button class="tab-btn" id="vtab-register" data-vpanel="vpanel-register">Register Visitor</button>
+      </div>
+
+      <div class="panel active" id="vpanel-verify">
+        <label for="otp-input">OTP code</label>
+        <input type="text" id="otp-input" placeholder="6-digit code" />
+
+        <label for="otp-direction">Direction</label>
+        <select id="otp-direction">
+          <option value="IN">IN</option>
+          <option value="OUT">OUT</option>
+        </select>
+
+        <button class="action" id="btn-verify-otp">Verify OTP</button>
+      </div>
+
+      <div class="panel" id="vpanel-register">
+        <div class="field-grid">
+          <div>
+            <label for="reg-name">Visitor name</label>
+            <input type="text" id="reg-name" placeholder="Full name" />
+          </div>
+          <div>
+            <label for="reg-phone">Phone</label>
+            <input type="text" id="reg-phone" placeholder="10-digit number" />
+          </div>
+        </div>
+
+        <div class="field-grid">
+          <div>
+            <label for="reg-host">Host resident</label>
+            <select id="reg-host"></select>
+          </div>
+          <div>
+            <label for="reg-visit-type">Visit type</label>
+            <select id="reg-visit-type">
+              <option value="SHORT_TERM">Short-term (walk-in, 24h)</option>
+              <option value="LONG_TERM">Long-term</option>
+            </select>
+          </div>
+        </div>
+
+        <label for="reg-purpose">Purpose (optional)</label>
+        <input type="text" id="reg-purpose" placeholder="e.g. Family visit, tutoring" />
+
+        <div id="reg-longterm-fields" class="hidden">
+          <div class="field-grid">
+            <div>
+              <label for="reg-valid-until">Valid until</label>
+              <input type="datetime-local" id="reg-valid-until" />
+            </div>
+            <div>
+              <label for="reg-vehicle-type">Vehicle type (if any)</label>
+              <select id="reg-vehicle-type">
+                <option value="">— No vehicle —</option>
+                <option value="CAR">CAR</option>
+                <option value="BIKE">BIKE</option>
+              </select>
+            </div>
+          </div>
+          <label for="reg-vehicle-number">Vehicle number (optional)</label>
+          <input type="text" id="reg-vehicle-number" placeholder="e.g. KA-01-XY-9999" />
+        </div>
+
+        <button class="action" id="btn-register-visitor">Register Visitor</button>
+
+        <div class="inline-result hidden" id="reg-result"></div>
+      </div>
+    </div>
+
+    <!-- ---- Delivery panel ---- -->
+    <div class="panel" id="panel-delivery">
+      <label>Approval mode</label>
+      <div class="segmented">
+        <button class="active" id="del-mode-auto" data-mode="AUTO">Auto-approve</button>
+        <button id="del-mode-manual" data-mode="MANUAL">Manual approval</button>
+      </div>
+
+      <div class="field-grid">
+        <div>
+          <label for="del-courier-name">Courier name</label>
+          <input type="text" id="del-courier-name" placeholder="e.g. Ramesh" />
+        </div>
+        <div>
+          <label for="del-courier-phone">Courier phone (optional)</label>
+          <input type="text" id="del-courier-phone" placeholder="10-digit number" />
+        </div>
+      </div>
+
+      <div class="field-grid">
+        <div>
+          <label for="del-platform">Platform (optional)</label>
+          <input type="text" id="del-platform" placeholder="e.g. Amazon, Swiggy, Local" />
+        </div>
+        <div>
+          <label for="del-host">Host resident</label>
+          <select id="del-host"></select>
+        </div>
+      </div>
+
+      <label for="del-purpose">Purpose (optional)</label>
+      <input type="text" id="del-purpose" placeholder="e.g. Package delivery" />
+
+      <button class="action" id="btn-submit-delivery">Submit Delivery Request</button>
+
+      <div class="inline-result hidden" id="del-result"></div>
+
+      <h3 class="section-title" style="margin-top:24px;">Pending Manual Approvals</h3>
+      <button class="action secondary" id="btn-refresh-deliveries" style="margin-top:0;margin-bottom:10px;">Refresh</button>
+      <table>
+        <thead>
+          <tr><th>#</th><th>Courier</th><th>Host</th><th>Requested</th><th>Status</th><th>Action</th></tr>
+        </thead>
+        <tbody id="pending-deliveries-body">
+          <tr class="empty-row"><td colspan="6">No pending deliveries yet.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ---- Staff panel ---- -->
+    <div class="panel" id="panel-staff">
+      <label for="staff-credential-input">Staff ID-card code</label>
+      <input type="text" id="staff-credential-input" placeholder="e.g. TEST-STAFF-001" />
+
+      <label for="staff-direction">Direction</label>
+      <select id="staff-direction">
+        <option value="IN">IN</option>
+        <option value="OUT">OUT</option>
+      </select>
+
+      <button class="action" id="btn-verify-staff">Verify Staff</button>
+    </div>
+  </div>
+
+  <!-- ===================== MAINTENANCE CARD ===================== -->
+  <div class="card">
+    <h2 class="section-title">Maintenance</h2>
+    <div class="mtabs">
+      <button class="tab-btn active" id="mtab-bills" data-mpanel="mpanel-bills">Bills</button>
+      <button class="tab-btn" id="mtab-complaints" data-mpanel="mpanel-complaints">Complaints</button>
+    </div>
+
+    <div class="panel active" id="mpanel-bills">
+      <div class="field-grid">
+        <div>
+          <label for="bill-resident">Resident</label>
+          <select id="bill-resident"></select>
+        </div>
+        <div>
+          <label for="bill-month">Billing month</label>
+          <input type="month" id="bill-month" />
+        </div>
+      </div>
+      <div class="field-grid">
+        <div>
+          <label for="bill-amount">Amount due (₹)</label>
+          <input type="number" id="bill-amount" min="0" step="0.01" placeholder="e.g. 2500" />
+        </div>
+        <div>
+          <label for="bill-due-date">Due date</label>
+          <input type="date" id="bill-due-date" />
+        </div>
+      </div>
+      <button class="action" id="btn-create-bill">Create Bill</button>
+
+      <table>
+        <thead>
+          <tr><th>#</th><th>Resident</th><th>Month</th><th>Amount</th><th>Due</th><th>Status</th><th>Action</th></tr>
+        </thead>
+        <tbody id="bills-body">
+          <tr class="empty-row"><td colspan="7">No bills yet.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel" id="mpanel-complaints">
+      <div class="field-grid">
+        <div>
+          <label for="comp-resident">Resident</label>
+          <select id="comp-resident"></select>
+        </div>
+        <div>
+          <label for="comp-category">Category (optional)</label>
+          <input type="text" id="comp-category" placeholder="e.g. Plumbing, Electrical" />
+        </div>
+      </div>
+      <label for="comp-description">Description</label>
+      <textarea id="comp-description" rows="3" placeholder="Describe the issue"></textarea>
+      <button class="action" id="btn-create-complaint">Raise Complaint</button>
+
+      <table>
+        <thead>
+          <tr><th>#</th><th>Resident</th><th>Category</th><th>Description</th><th>Status</th><th>Action</th></tr>
+        </thead>
+        <tbody id="complaints-body">
+          <tr class="empty-row"><td colspan="6">No complaints yet.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===================== STAFF DIRECTORY CARD ===================== -->
+  <div class="card">
+    <h2 class="section-title">General Staff</h2>
+    <p style="color:var(--muted);font-size:0.85rem;margin-top:-8px;margin-bottom:14px;">
+      House help, drivers, security, and other recurring staff. Aadhaar is hashed on
+      registration -- only the last 4 digits are ever stored or shown.
+    </p>
+
+    <div class="field-grid">
+      <div>
+        <label for="staffreg-name">Name</label>
+        <input type="text" id="staffreg-name" placeholder="Full name" />
+      </div>
+      <div>
+        <label for="staffreg-phone">Phone</label>
+        <input type="text" id="staffreg-phone" placeholder="10-digit number" />
+      </div>
+    </div>
+
+    <div class="field-grid">
+      <div>
+        <label for="staffreg-role">Role</label>
+        <select id="staffreg-role">
+          <option value="MAID">Maid</option>
+          <option value="DRIVER">Driver</option>
+          <option value="SECURITY">Security</option>
+          <option value="COOK">Cook</option>
+          <option value="GARDENER">Gardener</option>
+          <option value="OTHER">Other</option>
+        </select>
+      </div>
+      <div>
+        <label for="staffreg-employer">Employed by (optional)</label>
+        <select id="staffreg-employer"></select>
+      </div>
+    </div>
+
+    <div class="field-grid">
+      <div>
+        <label for="staffreg-aadhaar">Aadhaar number (12 digits)</label>
+        <input type="text" id="staffreg-aadhaar" placeholder="e.g. 123456789012" maxlength="14" />
+      </div>
+      <div>
+        <label for="staffreg-expires">Contract end date (optional)</label>
+        <input type="date" id="staffreg-expires" />
+      </div>
+    </div>
+
+    <button class="action" id="btn-register-staff">Register Staff</button>
+
+    <div class="inline-result hidden" id="staffreg-result"></div>
+
+    <table>
+      <thead>
+        <tr><th>#</th><th>Name</th><th>Role</th><th>Employed by</th><th>Aadhaar</th><th>Credential</th><th>Status</th><th>Action</th></tr>
+      </thead>
+      <tbody id="staff-body">
+        <tr class="empty-row"><td colspan="8">No staff registered yet.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // -------------------------------------------------------------
+  // Fetch helpers
+  // -------------------------------------------------------------
+  async function postJSON(url, body) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(function () { return {}; });
+      if (!res.ok) {
+        return { ok: false, status: res.status, data: data, error: data.detail || ("Request failed (" + res.status + ")") };
+      }
+      return { ok: true, status: res.status, data: data };
+    } catch (err) {
+      return { ok: false, status: 0, data: null, error: "Network error: could not reach the server." };
+    }
+  }
+
+  async function getJSON(url) {
+    try {
+      const res = await fetch(url);
+      const data = await res.json().catch(function () { return {}; });
+      if (!res.ok) {
+        return { ok: false, status: res.status, data: data, error: data.detail || ("Request failed (" + res.status + ")") };
+      }
+      return { ok: true, status: res.status, data: data };
+    } catch (err) {
+      return { ok: false, status: 0, data: null, error: "Network error: could not reach the server." };
+    }
+  }
+
+  function parseUTC(ts) {
+    if (!ts) return null;
+    // Backend returns naive UTC timestamps with no "Z" suffix; append one
+    // so the browser interprets them as UTC rather than local time.
+    const iso = ts.endsWith("Z") ? ts : ts + "Z";
+    return new Date(iso);
+  }
+
+  function fmtTime(ts) {
+    const d = parseUTC(ts);
+    return d ? d.toLocaleString() : "—";
+  }
+
+  // -------------------------------------------------------------
+  // Generic tab switcher: wires a group of tab buttons (with a data-*
+  // attribute naming the panel id to show) to a set of panel elements.
+  // -------------------------------------------------------------
+  function wireTabs(tabButtons, dataAttr, panelIds) {
+    tabButtons.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        tabButtons.forEach(function (b) { b.classList.remove("active"); });
+        btn.classList.add("active");
+        const target = btn.getAttribute(dataAttr);
+        panelIds.forEach(function (pid) {
+          const el = document.getElementById(pid);
+          if (!el) return;
+          el.classList.toggle("active", pid === target);
+        });
+      });
+    });
+  }
+
+  wireTabs(
+    [document.getElementById("tab-vehicle"), document.getElementById("tab-visitor"), document.getElementById("tab-delivery"), document.getElementById("tab-staff")],
+    "data-panel",
+    ["panel-vehicle", "panel-visitor", "panel-delivery", "panel-staff"]
+  );
+
+  wireTabs(
+    [document.getElementById("vtab-verify"), document.getElementById("vtab-register")],
+    "data-vpanel",
+    ["vpanel-verify", "vpanel-register"]
+  );
+
+  wireTabs(
+    [document.getElementById("mtab-bills"), document.getElementById("mtab-complaints")],
+    "data-mpanel",
+    ["mpanel-bills", "mpanel-complaints"]
+  );
+
+  // -------------------------------------------------------------
+  // Status screen
+  // -------------------------------------------------------------
+  const statusScreen = document.getElementById("status-screen");
+  const statusMessage = document.getElementById("status-message");
+  const statusDetail = document.getElementById("status-detail");
+
+  function setStatus(state, message, detail) {
+    statusScreen.classList.remove("state-idle", "state-granted", "state-denied");
+    statusScreen.classList.add("state-" + state);
+    statusMessage.textContent = message;
+    statusDetail.textContent = detail || "";
+  }
+
+  // -------------------------------------------------------------
+  // Residents: loaded once, used to populate every resident dropdown.
+  // -------------------------------------------------------------
+  let residentsById = {};
+
+  async function loadResidents() {
+    const result = await getJSON("/residents");
+    if (!result.ok) return;
+    const residents = result.data;
+    residentsById = {};
+    residents.forEach(function (r) { residentsById[r.id] = r; });
+
+    const selects = [
+      document.getElementById("reg-host"),
+      document.getElementById("del-host"),
+      document.getElementById("bill-resident"),
+      document.getElementById("comp-resident"),
+    ];
+    selects.forEach(function (sel) {
+      if (!sel) return;
+      sel.innerHTML = "";
+      residents.forEach(function (r) {
+        const opt = document.createElement("option");
+        opt.value = r.id;
+        opt.textContent = r.name + " (" + r.apartment_no + ")";
+        sel.appendChild(opt);
+      });
+    });
+
+    // Staff employer dropdown is optional (security guards are often
+    // society-employed, not tied to one resident), so it gets a blank
+    // "none" option the others don't.
+    const employerSel = document.getElementById("staffreg-employer");
+    if (employerSel) {
+      employerSel.innerHTML = "";
+      const noneOpt = document.createElement("option");
+      noneOpt.value = "";
+      noneOpt.textContent = "— No specific resident (society-employed) —";
+      employerSel.appendChild(noneOpt);
+      residents.forEach(function (r) {
+        const opt = document.createElement("option");
+        opt.value = r.id;
+        opt.textContent = r.name + " (" + r.apartment_no + ")";
+        employerSel.appendChild(opt);
+      });
+    }
+  }
+
+  function residentLabel(id) {
+    const r = residentsById[id];
+    return r ? (r.name + " (" + r.apartment_no + ")") : ("#" + id);
+  }
+
+  function badge(text) {
+    const cls = String(text).toLowerCase();
+    return '<span class="badge ' + cls + '">' + text + "</span>";
+  }
+
+  // -------------------------------------------------------------
+  // Vehicle tab
+  // -------------------------------------------------------------
+  document.getElementById("btn-verify-rfid").addEventListener("click", async function () {
+    const value = document.getElementById("rfid-input").value.trim();
+    const direction = document.getElementById("rfid-direction").value;
+    if (!value) {
+      setStatus("denied", "NO CREDENTIAL", "Enter an RFID/FASTag code first.");
+      return;
+    }
+    setStatus("idle", "CHECKING...", "");
+    const result = await postJSON("/verify-rfid", { credential_value: value, gate_name: "MAIN_GATE", direction: direction });
+    if (!result.ok) {
+      setStatus("denied", "ERROR", result.error);
+      return;
+    }
+    const data = result.data;
+    if (data.access === "GRANTED") {
+      setStatus("granted", "ACCESS GRANTED", (data.vehicle_number || "") + (data.resident_name ? " — " + data.resident_name : ""));
+    } else {
+      setStatus("denied", "ACCESS DENIED", data.message || "");
+    }
+  });
+
+  // -------------------------------------------------------------
+  // Staff tab: verify staff ID-card credential
+  // -------------------------------------------------------------
+  document.getElementById("btn-verify-staff").addEventListener("click", async function () {
+    const value = document.getElementById("staff-credential-input").value.trim();
+    const direction = document.getElementById("staff-direction").value;
+    if (!value) {
+      setStatus("denied", "NO CREDENTIAL", "Enter a staff ID-card code first.");
+      return;
+    }
+    setStatus("idle", "CHECKING...", "");
+    const result = await postJSON("/verify-staff", { credential_value: value, gate_name: "MAIN_GATE", direction: direction });
+    if (!result.ok) {
+      setStatus("denied", "ERROR", result.error);
+      return;
+    }
+    const data = result.data;
+    if (data.access === "GRANTED") {
+      setStatus("granted", "ACCESS GRANTED", (data.staff_name || "") + (data.role ? " — " + data.role : "") + (data.employer_name ? " (" + data.employer_name + ")" : ""));
+    } else {
+      setStatus("denied", "ACCESS DENIED", data.message || "");
+    }
+  });
+
+  // -------------------------------------------------------------
+  // Visitor tab: verify OTP
+  // -------------------------------------------------------------
+  document.getElementById("btn-verify-otp").addEventListener("click", async function () {
+    const code = document.getElementById("otp-input").value.trim();
+    const direction = document.getElementById("otp-direction").value;
+    if (!code) {
+      setStatus("denied", "NO OTP", "Enter the OTP code first.");
+      return;
+    }
+    setStatus("idle", "CHECKING...", "");
+    const result = await postJSON("/verify-otp", { otp_code: code, gate_name: "MAIN_GATE", direction: direction });
+    if (!result.ok) {
+      setStatus("denied", "ERROR", result.error);
+      return;
+    }
+    const data = result.data;
+    if (data.access === "GRANTED") {
+      setStatus("granted", "ACCESS GRANTED", (data.visitor_name || "") + (data.host_resident_name ? " visiting " + data.host_resident_name : ""));
+    } else {
+      setStatus("denied", "ACCESS DENIED", data.message || "");
+    }
+  });
+
+  // -------------------------------------------------------------
+  // Visitor tab: register visitor
+  // -------------------------------------------------------------
+  const visitTypeSelect = document.getElementById("reg-visit-type");
+  const longTermFields = document.getElementById("reg-longterm-fields");
+
+  function syncLongTermFields() {
+    longTermFields.classList.toggle("hidden", visitTypeSelect.value !== "LONG_TERM");
+  }
+  visitTypeSelect.addEventListener("change", syncLongTermFields);
+  syncLongTermFields();
+
+  document.getElementById("btn-register-visitor").addEventListener("click", async function () {
+    const resultBox = document.getElementById("reg-result");
+    resultBox.classList.add("hidden");
+
+    const name = document.getElementById("reg-name").value.trim();
+    const phone = document.getElementById("reg-phone").value.trim();
+    const hostSelect = document.getElementById("reg-host");
+    const hostId = hostSelect.value ? parseInt(hostSelect.value, 10) : null;
+    const visitType = visitTypeSelect.value;
+    const purpose = document.getElementById("reg-purpose").value.trim();
+
+    if (!name || !phone || !hostId) {
+      resultBox.classList.remove("hidden");
+      resultBox.innerHTML = "Please fill in visitor name, phone, and host resident.";
+      return;
+    }
+
+    const payload = {
+      name: name,
+      phone: phone,
+      host_resident_id: hostId,
+      visit_type: visitType,
+      purpose: purpose || null,
+    };
+
+    if (visitType === "LONG_TERM") {
+      const validUntilRaw = document.getElementById("reg-valid-until").value;
+      if (!validUntilRaw) {
+        resultBox.classList.remove("hidden");
+        resultBox.innerHTML = "Long-term visits require a 'valid until' date/time.";
+        return;
+      }
+      payload.valid_until = new Date(validUntilRaw).toISOString();
+      const vehicleNumber = document.getElementById("reg-vehicle-number").value.trim();
+      const vehicleType = document.getElementById("reg-vehicle-type").value;
+      if (vehicleNumber) {
+        payload.vehicle_number = vehicleNumber;
+        payload.vehicle_type = vehicleType || "CAR";
+      }
+    }
+
+    const result = await postJSON("/visitors", payload);
+    resultBox.classList.remove("hidden");
+    if (!result.ok) {
+      resultBox.innerHTML = "Registration failed: " + result.error;
+      return;
+    }
+
+    const visitor = result.data;
+    resultBox.innerHTML =
+      "Visitor <strong>" + visitor.name + "</strong> registered.<br/>" +
+      "Share this OTP with them for gate entry (valid until " + fmtTime(visitor.otp_expires_at) + "):<br/>" +
+      '<span class="otp-code">' + visitor.otp_code + "</span>";
+
+    setStatus("idle", "VISITOR REGISTERED", visitor.name + " — OTP issued.");
+  });
+
+  // -------------------------------------------------------------
+  // Delivery tab
+  // -------------------------------------------------------------
+  let deliveryMode = "AUTO";
+  const delModeAuto = document.getElementById("del-mode-auto");
+  const delModeManual = document.getElementById("del-mode-manual");
+
+  delModeAuto.addEventListener("click", function () {
+    deliveryMode = "AUTO";
+    delModeAuto.classList.add("active");
+    delModeManual.classList.remove("active");
+  });
+  delModeManual.addEventListener("click", function () {
+    deliveryMode = "MANUAL";
+    delModeManual.classList.add("active");
+    delModeAuto.classList.remove("active");
+  });
+
+  document.getElementById("btn-submit-delivery").addEventListener("click", async function () {
+    const resultBox = document.getElementById("del-result");
+    resultBox.classList.add("hidden");
+
+    const courierName = document.getElementById("del-courier-name").value.trim();
+    const courierPhone = document.getElementById("del-courier-phone").value.trim();
+    const platform = document.getElementById("del-platform").value.trim();
+    const hostSelect = document.getElementById("del-host");
+    const hostId = hostSelect.value ? parseInt(hostSelect.value, 10) : null;
+    const purpose = document.getElementById("del-purpose").value.trim();
+
+    if (!courierName || !hostId) {
+      resultBox.classList.remove("hidden");
+      resultBox.innerHTML = "Please fill in courier name and host resident.";
+      return;
+    }
+
+    const payload = {
+      courier_name: courierName,
+      courier_phone: courierPhone || null,
+      platform: platform || null,
+      host_resident_id: hostId,
+      purpose: purpose || null,
+      approval_mode: deliveryMode,
+    };
+
+    const result = await postJSON("/deliveries", payload);
+    resultBox.classList.remove("hidden");
+    if (!result.ok) {
+      resultBox.innerHTML = "Submission failed: " + result.error;
+      return;
+    }
+
+    const delivery = result.data;
+    if (delivery.status === "APPROVED") {
+      resultBox.innerHTML = "Delivery for <strong>" + delivery.courier_name + "</strong> auto-approved. Access granted.";
+      setStatus("granted", "DELIVERY APPROVED", delivery.courier_name + " — auto-approved.");
+    } else {
+      resultBox.innerHTML = "Delivery for <strong>" + delivery.courier_name + "</strong> submitted and awaiting manual approval below.";
+      setStatus("idle", "AWAITING APPROVAL", delivery.courier_name + " — pending manual decision.");
+    }
+
+    await loadPendingDeliveries();
+  });
+
+  async function loadPendingDeliveries() {
+    const body = document.getElementById("pending-deliveries-body");
+    const result = await getJSON("/deliveries");
+    if (!result.ok) {
+      body.innerHTML = '<tr class="empty-row"><td colspan="6">Could not load deliveries: ' + result.error + "</td></tr>";
+      return;
+    }
+    const pending = result.data.filter(function (d) { return d.approval_mode === "MANUAL" && d.status === "PENDING"; });
+    if (pending.length === 0) {
+      body.innerHTML = '<tr class="empty-row"><td colspan="6">No pending deliveries right now.</td></tr>';
+      return;
+    }
+    body.innerHTML = pending.map(function (d) {
+      return "<tr>" +
+        "<td>" + d.id + "</td>" +
+        "<td>" + d.courier_name + (d.platform ? " (" + d.platform + ")" : "") + "</td>" +
+        "<td>" + residentLabel(d.host_resident_id) + "</td>" +
+        "<td>" + fmtTime(d.requested_at) + "</td>" +
+        "<td>" + badge(d.status) + "</td>" +
+        '<td class="row-actions">' +
+          '<button class="approve" data-id="' + d.id + '" data-approve="true">Approve</button>' +
+          '<button class="deny" data-id="' + d.id + '" data-approve="false">Deny</button>' +
+        "</td>" +
+      "</tr>";
+    }).join("");
+
+    body.querySelectorAll("button[data-id]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        const id = btn.getAttribute("data-id");
+        const approve = btn.getAttribute("data-approve") === "true";
+        const result = await postJSON("/deliveries/" + id + "/decision", { approve: approve, gate_name: "MAIN_GATE" });
+        if (!result.ok) {
+          setStatus("denied", "ERROR", result.error);
+          return;
+        }
+        setStatus(approve ? "granted" : "denied", approve ? "DELIVERY APPROVED" : "DELIVERY DENIED", result.data.courier_name);
+        await loadPendingDeliveries();
+      });
+    });
+  }
+
+  document.getElementById("btn-refresh-deliveries").addEventListener("click", loadPendingDeliveries);
+
+  // -------------------------------------------------------------
+  // Maintenance: Bills
+  // -------------------------------------------------------------
+  document.getElementById("btn-create-bill").addEventListener("click", async function () {
+    const residentSelect = document.getElementById("bill-resident");
+    const residentId = residentSelect.value ? parseInt(residentSelect.value, 10) : null;
+    const month = document.getElementById("bill-month").value; // "YYYY-MM"
+    const amount = parseFloat(document.getElementById("bill-amount").value);
+    const dueDateRaw = document.getElementById("bill-due-date").value;
+
+    if (!residentId || !month || isNaN(amount) || !dueDateRaw) {
+      alert("Please fill in resident, billing month, amount, and due date.");
+      return;
+    }
+
+    const payload = {
+      resident_id: residentId,
+      billing_month: month,
+      amount_due: amount,
+      due_date: new Date(dueDateRaw).toISOString(),
+    };
+
+    const result = await postJSON("/maintenance/bills", payload);
+    if (!result.ok) {
+      alert("Could not create bill: " + result.error);
+      return;
+    }
+    document.getElementById("bill-amount").value = "";
+    await loadBills();
+  });
+
+  async function loadBills() {
+    const body = document.getElementById("bills-body");
+    const result = await getJSON("/maintenance/bills");
+    if (!result.ok) {
+      body.innerHTML = '<tr class="empty-row"><td colspan="7">Could not load bills: ' + result.error + "</td></tr>";
+      return;
+    }
+    const bills = result.data;
+    if (bills.length === 0) {
+      body.innerHTML = '<tr class="empty-row"><td colspan="7">No bills yet.</td></tr>';
+      return;
+    }
+    body.innerHTML = bills.map(function (b) {
+      const payBtn = b.status === "PAID"
+        ? "—"
+        : '<button class="approve" data-pay-id="' + b.id + '">Mark Paid</button>';
+      return "<tr>" +
+        "<td>" + b.id + "</td>" +
+        "<td>" + residentLabel(b.resident_id) + "</td>" +
+        "<td>" + b.billing_month + "</td>" +
+        '<td class="mono">₹' + b.amount_due.toFixed(2) + "</td>" +
+        "<td>" + fmtTime(b.due_date).split(",")[0] + "</td>" +
+        "<td>" + badge(b.status) + "</td>" +
+        "<td>" + payBtn + "</td>" +
+      "</tr>";
+    }).join("");
+
+    body.querySelectorAll("button[data-pay-id]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        const id = btn.getAttribute("data-pay-id");
+        const result = await postJSON("/maintenance/bills/" + id + "/pay", { payment_reference: null });
+        if (!result.ok) {
+          alert("Could not mark bill paid: " + result.error);
+          return;
+        }
+        await loadBills();
+      });
+    });
+  }
+
+  // -------------------------------------------------------------
+  // Maintenance: Complaints
+  // -------------------------------------------------------------
+  document.getElementById("btn-create-complaint").addEventListener("click", async function () {
+    const residentSelect = document.getElementById("comp-resident");
+    const residentId = residentSelect.value ? parseInt(residentSelect.value, 10) : null;
+    const category = document.getElementById("comp-category").value.trim();
+    const description = document.getElementById("comp-description").value.trim();
+
+    if (!residentId || !description) {
+      alert("Please fill in resident and description.");
+      return;
+    }
+
+    const payload = { resident_id: residentId, category: category || null, description: description };
+    const result = await postJSON("/complaints", payload);
+    if (!result.ok) {
+      alert("Could not raise complaint: " + result.error);
+      return;
+    }
+    document.getElementById("comp-description").value = "";
+    await loadComplaints();
+  });
+
+  async function loadComplaints() {
+    const body = document.getElementById("complaints-body");
+    const result = await getJSON("/complaints");
+    if (!result.ok) {
+      body.innerHTML = '<tr class="empty-row"><td colspan="6">Could not load complaints: ' + result.error + "</td></tr>";
+      return;
+    }
+    const complaints = result.data;
+    if (complaints.length === 0) {
+      body.innerHTML = '<tr class="empty-row"><td colspan="6">No complaints yet.</td></tr>';
+      return;
+    }
+    body.innerHTML = complaints.map(function (c) {
+      let actions = "";
+      if (c.status === "OPEN") {
+        actions = '<button data-start-id="' + c.id + '">Start</button> <button data-resolve-id="' + c.id + '">Resolve</button>';
+      } else if (c.status === "IN_PROGRESS") {
+        actions = '<button data-resolve-id="' + c.id + '">Resolve</button>';
+      } else {
+        actions = "—";
+      }
+      return "<tr>" +
+        "<td>" + c.id + "</td>" +
+        "<td>" + residentLabel(c.resident_id) + "</td>" +
+        "<td>" + (c.category || "—") + "</td>" +
+        "<td>" + c.description + "</td>" +
+        "<td>" + badge(c.status) + "</td>" +
+        '<td class="row-actions">' + actions + "</td>" +
+      "</tr>";
+    }).join("");
+
+    body.querySelectorAll("button[data-start-id]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        const id = btn.getAttribute("data-start-id");
+        const result = await postJSON("/complaints/" + id + "/status", { status: "IN_PROGRESS", resolution_notes: null });
+        if (!result.ok) {
+          alert("Could not update complaint: " + result.error);
+          return;
+        }
+        await loadComplaints();
+      });
+    });
+
+    body.querySelectorAll("button[data-resolve-id]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        const id = btn.getAttribute("data-resolve-id");
+        const notes = window.prompt("Resolution notes (optional):", "");
+        const result = await postJSON("/complaints/" + id + "/status", { status: "RESOLVED", resolution_notes: notes || null });
+        if (!result.ok) {
+          alert("Could not resolve complaint: " + result.error);
+          return;
+        }
+        await loadComplaints();
+      });
+    });
+  }
+
+  // -------------------------------------------------------------
+  // General Staff
+  // -------------------------------------------------------------
+  document.getElementById("btn-register-staff").addEventListener("click", async function () {
+    const resultBox = document.getElementById("staffreg-result");
+    resultBox.classList.add("hidden");
+
+    const name = document.getElementById("staffreg-name").value.trim();
+    const phone = document.getElementById("staffreg-phone").value.trim();
+    const role = document.getElementById("staffreg-role").value;
+    const employerSelect = document.getElementById("staffreg-employer");
+    const employerId = employerSelect.value ? parseInt(employerSelect.value, 10) : null;
+    const aadhaarRaw = document.getElementById("staffreg-aadhaar").value.trim();
+    const expiresRaw = document.getElementById("staffreg-expires").value;
+
+    if (!name || !phone || !aadhaarRaw) {
+      resultBox.classList.remove("hidden");
+      resultBox.innerHTML = "Please fill in name, phone, and Aadhaar number.";
+      return;
+    }
+
+    const payload = {
+      name: name,
+      phone: phone,
+      role: role,
+      employed_by_resident_id: employerId,
+      aadhaar_number: aadhaarRaw,
+    };
+    if (expiresRaw) {
+      payload.expires_at = new Date(expiresRaw).toISOString();
+    }
+
+    const result = await postJSON("/staff", payload);
+    resultBox.classList.remove("hidden");
+    if (!result.ok) {
+      resultBox.innerHTML = "Registration failed: " + result.error;
+      return;
+    }
+
+    const member = result.data;
+    resultBox.innerHTML =
+      "Staff member <strong>" + member.name + "</strong> registered.<br/>" +
+      "Their gate ID-card code (Aadhaar stored only as last 4 digits: " + member.aadhaar_last4 + "):<br/>" +
+      '<span class="otp-code">' + member.credential_value + "</span>";
+
+    document.getElementById("staffreg-name").value = "";
+    document.getElementById("staffreg-phone").value = "";
+    document.getElementById("staffreg-aadhaar").value = "";
+    document.getElementById("staffreg-expires").value = "";
+
+    await loadStaffDirectory();
+  });
+
+  async function loadStaffDirectory() {
+    const body = document.getElementById("staff-body");
+    const result = await getJSON("/staff");
+    if (!result.ok) {
+      body.innerHTML = '<tr class="empty-row"><td colspan="8">Could not load staff: ' + result.error + "</td></tr>";
+      return;
+    }
+    const staffList = result.data;
+    if (staffList.length === 0) {
+      body.innerHTML = '<tr class="empty-row"><td colspan="8">No staff registered yet.</td></tr>';
+      return;
+    }
+    body.innerHTML = staffList.map(function (s) {
+      const employer = s.employed_by_resident_id ? residentLabel(s.employed_by_resident_id) : "— Society —";
+      const action = s.status === "BLOCKED"
+        ? '<button class="approve" data-unblock-id="' + s.id + '">Unblock</button>'
+        : '<button class="deny" data-block-id="' + s.id + '">Block</button>';
+      return "<tr>" +
+        "<td>" + s.id + "</td>" +
+        "<td>" + s.name + "</td>" +
+        "<td>" + s.role + "</td>" +
+        "<td>" + employer + "</td>" +
+        '<td class="mono">XXXX-XXXX-' + s.aadhaar_last4 + "</td>" +
+        '<td class="mono">' + s.credential_value + "</td>" +
+        "<td>" + badge(s.status) + "</td>" +
+        '<td class="row-actions">' + action + "</td>" +
+      "</tr>";
+    }).join("");
+
+    body.querySelectorAll("button[data-block-id]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        const id = btn.getAttribute("data-block-id");
+        const result = await postJSON("/staff/" + id + "/status", { status: "BLOCKED" });
+        if (!result.ok) {
+          alert("Could not block staff member: " + result.error);
+          return;
+        }
+        await loadStaffDirectory();
+      });
+    });
+
+    body.querySelectorAll("button[data-unblock-id]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        const id = btn.getAttribute("data-unblock-id");
+        const result = await postJSON("/staff/" + id + "/status", { status: "ACTIVE" });
+        if (!result.ok) {
+          alert("Could not unblock staff member: " + result.error);
+          return;
+        }
+        await loadStaffDirectory();
+      });
+    });
+  }
+
+  // -------------------------------------------------------------
+  // Initial load
+  // -------------------------------------------------------------
+  async function init() {
+    await loadResidents();
+    await loadPendingDeliveries();
+    await loadBills();
+    await loadComplaints();
+    await loadStaffDirectory();
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
