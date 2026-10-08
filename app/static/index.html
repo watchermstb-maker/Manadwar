@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ManaDwar — Gate Access Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #16181a;
+    --panel: #1e2123;
+    --well: #131516;
+    --border: #34393c;
+    --text: #ede9e1;
+    --muted: #8d9296;
+    --granted: #33c46b;
+    --granted-dim: #17331f;
+    --denied: #e5484d;
+    --denied-dim: #3a1718;
+    --idle: #e8a33d;
+    --idle-dim: #3a2d12;
+    --info: #5aa9e6;
+    --info-dim: #16293a;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "IBM Plex Sans", sans-serif;
+    padding: 24px;
+  }
+
+  .wrap { max-width: 980px; margin: 0 auto; }
+
+  header { margin-bottom: 20px; }
+  header h1 { font-size: 1.6rem; margin: 0 0 4px; letter-spacing: 0.5px; }
+  header p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .tab-btn {
+    background: var(--well);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .tab-btn.active { color: var(--text); border-color: var(--info); background: var(--info-dim); }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .status-screen {
+    background: var(--well);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px;
+    margin-bottom: 18px;
+    font-family: "IBM Plex Mono", monospace;
+  }
+  .status-screen.state-idle { border-color: var(--idle); background: var(--idle-dim); }
+  .status-screen.state-granted { border-color: var(--granted); background: var(--granted-dim); }
+  .status-screen.state-denied { border-color: var(--denied); background: var(--denied-dim); }
+
+  .status-light {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 8px;
+    background: var(--idle);
+  }
+  .state-granted .status-light { background: var(--granted); }
+  .state-denied .status-light { background: var(--denied); }
+
+  .status-message { font-size: 1rem; font-weight: 600; }
+  .status-detail { color: var(--muted); font-size: 0.85rem; margin-top: 4px; }
+
+  label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 4px; margin-top: 12px; }
+  label:first-of-type { margin-top: 0; }
+
+  input, select {
+    width: 100%;
+    background: var(--well);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 9px 10px;
+    border-radius: 6px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.9rem;
+  }
+  input:focus, select:focus { outline: 1px solid var(--info); }
+
+  button.action {
+    margin-top: 16px;
+    background: var(--info-dim);
+    border: 1px solid var(--info);
+    color: var(--text);
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+  button.action:hover { background: var(--info); color: #0b1620; }
+
+  .hidden { display: none !important; }
+
+  .inline-result {
+    margin-top: 14px;
+    padding: 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--well);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.85rem;
+  }
+  .inline-result .otp-code { font-size: 1.4rem; font-weight: 700; color: var(--idle); letter-spacing: 2px; }
+
+  .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+  @media (max-width: 640px) {
+    .field-grid { grid-template-columns: 1fr; }
+    body { padding: 14px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>ManaDwar</h1>
+    <p>Gate Access Terminal — demo console</p>
+  </header>
+
+  <div class="card">
+    <div class="tabs">
+      <button class="tab-btn active" id="tab-vehicle" data-panel="panel-vehicle">Vehicle</button>
+      <button class="tab-btn" id="tab-visitor" data-panel="panel-visitor">Visitor</button>
+    </div>
+
+    <div class="status-screen state-idle" id="status-screen">
+      <div><span class="status-light"></span><span class="status-message" id="status-message">STANDING BY</span></div>
+      <div class="status-detail" id="status-detail">Present a credential or OTP to begin.</div>
+    </div>
+
+    <div class="panel active" id="panel-vehicle">
+      <label for="rfid-input">RFID / FASTag code</label>
+      <input type="text" id="rfid-input" placeholder="e.g. TEST-RFID-001" />
+
+      <label for="rfid-direction">Direction</label>
+      <select id="rfid-direction">
+        <option value="IN">IN</option>
+        <option value="OUT">OUT</option>
+      </select>
+
+      <button class="action" id="btn-verify-rfid">Verify Credential</button>
+    </div>
+
+    <div class="panel" id="panel-visitor">
+      <div class="tabs">
+        <button class="tab-btn active" id="vtab-verify" data-vpanel="vpanel-verify">Verify OTP</button>
+        <button class="tab-btn" id="vtab-register" data-vpanel="vpanel-register">Register Visitor</button>
+      </div>
+
+      <div class="panel active" id="vpanel-verify">
+        <label for="otp-input">OTP code</label>
+        <input type="text" id="otp-input" placeholder="6-digit code" />
+
+        <label for="otp-direction">Direction</label>
+        <select id="otp-direction">
+          <option value="IN">IN</option>
+          <option value="OUT">OUT</option>
+        </select>
+
+        <button class="action" id="btn-verify-otp">Verify OTP</button>
+      </div>
+
+      <div class="panel" id="vpanel-register">
+        <div class="field-grid">
+          <div>
+            <label for="reg-name">Visitor name</label>
+            <input type="text" id="reg-name" placeholder="Full name" />
+          </div>
+          <div>
+            <label for="reg-phone">Phone</label>
+            <input type="text" id="reg-phone" placeholder="10-digit number" />
+          </div>
+        </div>
+
+        <div class="field-grid">
+          <div>
+            <label for="reg-host">Host resident</label>
+            <select id="reg-host"></select>
+          </div>
+          <div>
+            <label for="reg-visit-type">Visit type</label>
+            <select id="reg-visit-type">
+              <option value="SHORT_TERM">Short-term (walk-in, 24h)</option>
+              <option value="LONG_TERM">Long-term</option>
+            </select>
+          </div>
+        </div>
+
+        <label for="reg-purpose">Purpose (optional)</label>
+        <input type="text" id="reg-purpose" placeholder="e.g. Family visit, tutoring" />
+
+        <div id="reg-longterm-fields" class="hidden">
+          <div class="field-grid">
+            <div>
+              <label for="reg-valid-until">Valid until</label>
+              <input type="datetime-local" id="reg-valid-until" />
+            </div>
+            <div>
+              <label for="reg-vehicle-type">Vehicle type (if any)</label>
+              <select id="reg-vehicle-type">
+                <option value="">— No vehicle —</option>
+                <option value="CAR">CAR</option>
+                <option value="BIKE">BIKE</option>
+              </select>
+            </div>
+          </div>
+          <label for="reg-vehicle-number">Vehicle number (optional)</label>
+          <input type="text" id="reg-vehicle-number" placeholder="e.g. KA-01-XY-9999" />
+        </div>
+
+        <button class="action" id="btn-register-visitor">Register Visitor</button>
+
+        <div class="inline-result hidden" id="reg-result"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  async function postJSON(url, body) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(function () { return {}; });
+      if (!res.ok) {
+        return { ok: false, status: res.status, data: data, error: data.detail || ("Request failed (" + res.status + ")") };
+      }
+      return { ok: true, status: res.status, data: data };
+    } catch (err) {
+      return { ok: false, status: 0, data: null, error: "Network error: could not reach the server." };
+    }
+  }
+
+  async function getJSON(url) {
+    try {
+      const res = await fetch(url);
+      const data = await res.json().catch(function () { return {}; });
+      if (!res.ok) {
+        return { ok: false, status: res.status, data: data, error: data.detail || ("Request failed (" + res.status + ")") };
+      }
+      return { ok: true, status: res.status, data: data };
+    } catch (err) {
+      return { ok: false, status: 0, data: null, error: "Network error: could not reach the server." };
+    }
+  }
+
+  function parseUTC(ts) {
+    if (!ts) return null;
+    const iso = ts.endsWith("Z") ? ts : ts + "Z";
+    return new Date(iso);
+  }
+
+  function fmtTime(ts) {
+    const d = parseUTC(ts);
+    return d ? d.toLocaleString() : "—";
+  }
+
+  function wireTabs(tabButtons, dataAttr, panelIds) {
+    tabButtons.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        tabButtons.forEach(function (b) { b.classList.remove("active"); });
+        btn.classList.add("active");
+        const target = btn.getAttribute(dataAttr);
+        panelIds.forEach(function (pid) {
+          const el = document.getElementById(pid);
+          if (!el) return;
+          el.classList.toggle("active", pid === target);
+        });
+      });
+    });
+  }
+
+  wireTabs(
+    [document.getElementById("tab-vehicle"), document.getElementById("tab-visitor")],
+    "data-panel",
+    ["panel-vehicle", "panel-visitor"]
+  );
+
+  wireTabs(
+    [document.getElementById("vtab-verify"), document.getElementById("vtab-register")],
+    "data-vpanel",
+    ["vpanel-verify", "vpanel-register"]
+  );
+
+  const statusScreen = document.getElementById("status-screen");
+  const statusMessage = document.getElementById("status-message");
+  const statusDetail = document.getElementById("status-detail");
+
+  function setStatus(state, message, detail) {
+    statusScreen.classList.remove("state-idle", "state-granted", "state-denied");
+    statusScreen.classList.add("state-" + state);
+    statusMessage.textContent = message;
+    statusDetail.textContent = detail || "";
+  }
+
+  let residentsById = {};
+
+  async function loadResidents() {
+    const result = await getJSON("/residents");
+    if (!result.ok) return;
+    const residents = result.data;
+    residentsById = {};
+    residents.forEach(function (r) { residentsById[r.id] = r; });
+
+    const sel = document.getElementById("reg-host");
+    if (sel) {
+      sel.innerHTML = "";
+      residents.forEach(function (r) {
+        const opt = document.createElement("option");
+        opt.value = r.id;
+        opt.textContent = r.name + " (" + r.apartment_no + ")";
+        sel.appendChild(opt);
+      });
+    }
+  }
+
+  document.getElementById("btn-verify-rfid").addEventListener("click", async function () {
+    const value = document.getElementById("rfid-input").value.trim();
+    const direction = document.getElementById("rfid-direction").value;
+    if (!value) {
+      setStatus("denied", "NO CREDENTIAL", "Enter an RFID/FASTag code first.");
+      return;
+    }
+    setStatus("idle", "CHECKING...", "");
+    const result = await postJSON("/verify-rfid", { credential_value: value, gate_name: "MAIN_GATE", direction: direction });
+    if (!result.ok) {
+      setStatus("denied", "ERROR", result.error);
+      return;
+    }
+    const data = result.data;
+    if (data.access === "GRANTED") {
+      setStatus("granted", "ACCESS GRANTED", (data.vehicle_number || "") + (data.resident_name ? " — " + data.resident_name : ""));
+    } else {
+      setStatus("denied", "ACCESS DENIED", data.message || "");
+    }
+  });
+
+  document.getElementById("btn-verify-otp").addEventListener("click", async function () {
+    const code = document.getElementById("otp-input").value.trim();
+    const direction = document.getElementById("otp-direction").value;
+    if (!code) {
+      setStatus("denied", "NO OTP", "Enter the OTP code first.");
+      return;
+    }
+    setStatus("idle", "CHECKING...", "");
+    const result = await postJSON("/verify-otp", { otp_code: code, gate_name: "MAIN_GATE", direction: direction });
+    if (!result.ok) {
+      setStatus("denied", "ERROR", result.error);
+      return;
+    }
+    const data = result.data;
+    if (data.access === "GRANTED") {
+      setStatus("granted", "ACCESS GRANTED", (data.visitor_name || "") + (data.host_resident_name ? " visiting " + data.host_resident_name : ""));
+    } else {
+      setStatus("denied", "ACCESS DENIED", data.message || "");
+    }
+  });
+
+  const visitTypeSelect = document.getElementById("reg-visit-type");
+  const longTermFields = document.getElementById("reg-longterm-fields");
+
+  function syncLongTermFields() {
+    longTermFields.classList.toggle("hidden", visitTypeSelect.value !== "LONG_TERM");
+  }
+  visitTypeSelect.addEventListener("change", syncLongTermFields);
+  syncLongTermFields();
+
+  document.getElementById("btn-register-visitor").addEventListener("click", async function () {
+    const resultBox = document.getElementById("reg-result");
+    resultBox.classList.add("hidden");
+
+    const name = document.getElementById("reg-name").value.trim();
+    const phone = document.getElementById("reg-phone").value.trim();
+    const hostSelect = document.getElementById("reg-host");
+    const hostId = hostSelect.value ? parseInt(hostSelect.value, 10) : null;
+    const visitType = visitTypeSelect.value;
+    const purpose = document.getElementById("reg-purpose").value.trim();
+
+    if (!name || !phone || !hostId) {
+      resultBox.classList.remove("hidden");
+      resultBox.innerHTML = "Please fill in visitor name, phone, and host resident.";
+      return;
+    }
+
+    const payload = {
+      name: name,
+      phone: phone,
+      host_resident_id: hostId,
+      visit_type: visitType,
+      purpose: purpose || null,
+    };
+
+    if (visitType === "LONG_TERM") {
+      const validUntilRaw = document.getElementById("reg-valid-until").value;
+      if (!validUntilRaw) {
+        resultBox.classList.remove("hidden");
+        resultBox.innerHTML = "Long-term visits require a 'valid until' date/time.";
+        return;
+      }
+      payload.valid_until = new Date(validUntilRaw).toISOString();
+      const vehicleNumber = document.getElementById("reg-vehicle-number").value.trim();
+      const vehicleType = document.getElementById("reg-vehicle-type").value;
+      if (vehicleNumber) {
+        payload.vehicle_number = vehicleNumber;
+        payload.vehicle_type = vehicleType || "CAR";
+      }
+    }
+
+    const result = await postJSON("/visitors", payload);
+    resultBox.classList.remove("hidden");
+    if (!result.ok) {
+      resultBox.innerHTML = "Registration failed: " + result.error;
+      return;
+    }
+
+    const visitor = result.data;
+    resultBox.innerHTML =
+      "Visitor <strong>" + visitor.name + "</strong> registered.<br/>" +
+      "Share this OTP with them for gate entry (valid until " + fmtTime(visitor.otp_expires_at) + "):<br/>" +
+      '<span class="otp-code">' + visitor.otp_code + "</span>";
+
+    setStatus("idle", "VISITOR REGISTERED", visitor.name + " — OTP issued.");
+  });
+
+  loadResidents();
+})();
+</script>
+</body>
+</html>
