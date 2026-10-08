@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+pydantic
+python-dotenv
+
+# Uncomment to use Postgres instead of SQLite (see .env.example):
+# psycopg2-binary
