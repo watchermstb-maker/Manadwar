@@ -1,7 +1,7 @@
-# ManaDwar — Access Control Backend (Phase 2: + OTP Visitor Entry)
+# ManaDwar — Access Control Backend (Phase 3: + Delivery Approval)
 
-A prototype smart-community gate access system: RFID vehicle entry plus
-OTP-based visitor entry.
+A prototype smart-community gate access system: RFID vehicle entry, OTP
+visitor entry, and delivery approval (auto or manual).
 
 ## Setup
 
@@ -18,11 +18,17 @@ python -m app.seed
 uvicorn app.main:app --reload
 ```
 
-Swagger docs: http://127.0.0.1:8000/docs
+- Demo UI (Vehicle + Visitor only so far): http://127.0.0.1:8000/
+- Swagger docs: http://127.0.0.1:8000/docs
 
-## Trying it
+## Trying delivery approval
 
-- **Vehicle**: `POST /verify-rfid` with `{"credential_value": "TEST-RFID-001"}`.
-- **Visitor**: `POST /visitors` to register (get back an `otp_code`), then
-  `POST /verify-otp` with that code. A second attempt with the same code
-  is denied as already-used.
+- `POST /deliveries` with `"approval_mode": "AUTO"` → instantly approved
+  and logged.
+- `POST /deliveries` with `"approval_mode": "MANUAL"` → stays `PENDING`
+  until `POST /deliveries/{id}/decision` with `{"approve": true}` or
+  `{"approve": false}`.
+- `GET /deliveries` to see all requests.
+
+Note: the demo UI at `/app/` does not have a Delivery tab yet — delivery
+approval is API-only in this phase. Use `/docs` to try it.

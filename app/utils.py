@@ -24,12 +24,14 @@ def log_attempt(
     gate_name,
     direction,
     access,
+    delivery_id=None,
 ):
     """Record one gate-entry attempt (granted or denied) to the EntryLog."""
     entry = models.EntryLog(
         vehicle_id=vehicle_id,
         credential_id=credential_id,
         visitor_id=visitor_id,
+        delivery_id=delivery_id,
         entry_method=entry_method,
         credential_value=credential_value,
         gate_name=gate_name,

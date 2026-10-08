@@ -5,9 +5,11 @@ from pydantic import BaseModel, ConfigDict
 
 from .models import (
     AccessResult,
+    ApprovalMode,
     CredentialScope,
     CredentialStatus,
     CredentialType,
+    DeliveryStatus,
     Direction,
     EntryMethod,
     VehicleType,
@@ -67,6 +69,7 @@ class EntryLogOut(BaseModel):
     vehicle_id: Optional[int] = None
     credential_id: Optional[int] = None
     visitor_id: Optional[int] = None
+    delivery_id: Optional[int] = None
     entry_method: EntryMethod
     credential_value: str
     gate_name: str
@@ -116,3 +119,36 @@ class VerifyOTPResponse(BaseModel):
     message: str
     visitor_name: Optional[str] = None
     host_resident_name: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Deliveries
+# ---------------------------------------------------------------------------
+
+class DeliveryCreate(BaseModel):
+    courier_name: str
+    courier_phone: Optional[str] = None
+    platform: Optional[str] = None
+    host_resident_id: int
+    purpose: Optional[str] = None
+    approval_mode: ApprovalMode
+
+
+class DeliveryDecision(BaseModel):
+    approve: bool
+    gate_name: str = "MAIN_GATE"
+
+
+class DeliveryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    courier_name: str
+    courier_phone: Optional[str] = None
+    platform: Optional[str] = None
+    host_resident_id: int
+    purpose: Optional[str] = None
+    approval_mode: ApprovalMode
+    status: DeliveryStatus
+    requested_at: datetime
+    decided_at: Optional[datetime] = None

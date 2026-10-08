@@ -38,6 +38,18 @@ class VisitType(str, enum.Enum):
 class EntryMethod(str, enum.Enum):
     RFID = "RFID"
     OTP = "OTP"
+    DELIVERY = "DELIVERY"
+
+
+class ApprovalMode(str, enum.Enum):
+    MANUAL = "MANUAL"
+    AUTO = "AUTO"
+
+
+class DeliveryStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    DENIED = "DENIED"
 
 
 class Direction(str, enum.Enum):
@@ -116,6 +128,23 @@ class VehicleCredential(Base):
     visitor = relationship("Visitor", back_populates="vehicle_credential")
 
 
+class Delivery(Base):
+    __tablename__ = "deliveries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    courier_name = Column(String, nullable=False)
+    courier_phone = Column(String, nullable=True)
+    platform = Column(String, nullable=True)
+    host_resident_id = Column(Integer, ForeignKey("residents.id"), nullable=False)
+    purpose = Column(String, nullable=True)
+    approval_mode = Column(SAEnum(ApprovalMode), nullable=False)
+    status = Column(SAEnum(DeliveryStatus), nullable=False, default=DeliveryStatus.PENDING)
+    requested_at = Column(DateTime, default=datetime.utcnow)
+    decided_at = Column(DateTime, nullable=True)
+
+    host_resident = relationship("Resident")
+
+
 class EntryLog(Base):
     __tablename__ = "entry_logs"
 
@@ -123,6 +152,7 @@ class EntryLog(Base):
     vehicle_id = Column(Integer, ForeignKey("vehicles.id"), nullable=True)
     credential_id = Column(Integer, ForeignKey("vehicle_credentials.id"), nullable=True)
     visitor_id = Column(Integer, ForeignKey("visitors.id"), nullable=True)
+    delivery_id = Column(Integer, ForeignKey("deliveries.id"), nullable=True)
     entry_method = Column(SAEnum(EntryMethod), nullable=False, default=EntryMethod.RFID)
     credential_value = Column(String, nullable=False)
     gate_name = Column(String, nullable=False, default="MAIN_GATE")
