@@ -1,7 +1,7 @@
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, timezone
+from typing import Annotated, Optional
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, field_validator
 
 from .models import (
     AccessResult,
@@ -20,6 +20,19 @@ from .models import (
     VehicleType,
     VisitType,
 )
+
+
+def _to_naive_utc(value: datetime) -> datetime:
+    """The database stores naive UTC datetimes. Browsers send timezone-aware
+    ISO strings (trailing Z, or an offset like +05:30); convert those to UTC
+    and drop the tzinfo so they compare safely with datetime.utcnow()."""
+    if value is not None and value.tzinfo is not None:
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value
+
+
+# Use for every datetime a client can SEND (not for ones we return).
+UtcDateTime = Annotated[datetime, AfterValidator(_to_naive_utc)]
 
 
 class ResidentOut(BaseModel):
@@ -90,7 +103,7 @@ class VisitorCreate(BaseModel):
     host_resident_id: int
     visit_type: VisitType
     purpose: Optional[str] = None
-    valid_until: Optional[datetime] = None
+    valid_until: Optional[UtcDateTime] = None
     vehicle_number: Optional[str] = None
     vehicle_type: Optional[VehicleType] = None
 
@@ -168,7 +181,7 @@ class MaintenanceBillCreate(BaseModel):
     resident_id: int
     billing_month: str  # "YYYY-MM"
     amount_due: float
-    due_date: datetime
+    due_date: UtcDateTime
 
 
 class MaintenanceBillPay(BaseModel):
@@ -242,7 +255,7 @@ class StaffCreate(BaseModel):
     # 12-digit Aadhaar number. Accepted here only to be hashed immediately --
     # it is never persisted in plaintext and is never echoed back by the API.
     aadhaar_number: str
-    expires_at: Optional[datetime] = None  # NULL = permanent staff
+    expires_at: Optional[UtcDateTime] = None  # NULL = permanent staff
 
 
 class StaffStatusUpdate(BaseModel):
