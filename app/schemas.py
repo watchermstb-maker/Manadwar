@@ -5,12 +5,12 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, field_validator
 
 from .models import (
     AccessResult,
-    ApprovalMode,
     BillStatus,
     ComplaintStatus,
     CredentialScope,
     CredentialStatus,
     CredentialType,
+    DeliverySource,
     DeliveryStatus,
     Direction,
     EntryMethod,
@@ -144,17 +144,29 @@ class VerifyOTPResponse(BaseModel):
 # Deliveries
 # ---------------------------------------------------------------------------
 
-class DeliveryCreate(BaseModel):
-    courier_name: str
-    courier_phone: Optional[str] = None
-    platform: Optional[str] = None
+class DeliveryAnnounce(BaseModel):
+    """A resident (or admin on their behalf) telling us what to expect."""
     host_resident_id: int
-    purpose: Optional[str] = None
-    approval_mode: ApprovalMode
+    platform: str  # e.g. Amazon, Swiggy, Flipkart
+    description: Optional[str] = None
+    expected_from: UtcDateTime
+    expected_until: UtcDateTime
+
+
+class DeliveryWalkIn(BaseModel):
+    """Guard logging a courier who turned up without being announced."""
+    host_resident_id: int
+    platform: Optional[str] = None
+    courier_name: Optional[str] = None
+    courier_phone: Optional[str] = None
+    description: Optional[str] = None
 
 
 class DeliveryDecision(BaseModel):
     approve: bool
+
+
+class DeliveryGateAction(BaseModel):
     gate_name: str = "MAIN_GATE"
 
 
@@ -162,15 +174,24 @@ class DeliveryOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    courier_name: str
-    courier_phone: Optional[str] = None
-    platform: Optional[str] = None
     host_resident_id: int
-    purpose: Optional[str] = None
-    approval_mode: ApprovalMode
+    source: DeliverySource
+    platform: Optional[str] = None
+    courier_name: Optional[str] = None
+    courier_phone: Optional[str] = None
+    description: Optional[str] = None
+    expected_from: Optional[datetime] = None
+    expected_until: Optional[datetime] = None
     status: DeliveryStatus
     requested_at: datetime
     decided_at: Optional[datetime] = None
+    admitted_at: Optional[datetime] = None
+
+
+class DeliverySummary(BaseModel):
+    pending_now: dict      # current counts: EXPECTED / AWAITING_APPROVAL / APPROVED
+    last_24h: dict         # counts by final status over the last 24 hours (+ total)
+    top_platforms_24h: list
 
 
 # ---------------------------------------------------------------------------

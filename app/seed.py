@@ -2,11 +2,16 @@
 
 Run with:  python -m app.seed
 """
+from datetime import datetime, timedelta
+
 from .auth import hash_password
 from .database import Base, SessionLocal, engine
 from .models import (
     CredentialStatus,
     CredentialType,
+    Delivery,
+    DeliverySource,
+    DeliveryStatus,
     Resident,
     Staff,
     StaffRole,
@@ -103,6 +108,15 @@ def seed():
             resident_id=r2.id,
         )
         db.add_all([u1, u2, u3, u4])
+        db.commit()
+
+        # One announced delivery so the delivery screens aren't empty on day one.
+        now = datetime.utcnow()
+        db.add(Delivery(
+            host_resident_id=r1.id, source=DeliverySource.ANNOUNCED, platform="Amazon",
+            description="Laptop box", expected_from=now, expected_until=now + timedelta(hours=8),
+            status=DeliveryStatus.EXPECTED,
+        ))
         db.commit()
 
         print("Seed complete.")

@@ -205,6 +205,18 @@
   .badge.pending, .badge.open { background: var(--idle-dim); color: var(--idle); }
   .badge.in_progress { background: var(--info-dim); color: var(--info); }
 
+  .badge.expected, .badge.awaiting_approval { background: var(--idle-dim); color: var(--idle); }
+  .badge.admitted { background: var(--granted-dim); color: var(--granted); }
+  .badge.cancelled { background: var(--well); color: var(--muted); }
+  .callout { border: 1px solid var(--idle); border-left-width: 4px; background: var(--idle-dim); border-radius: 6px; padding: 12px 14px; margin-bottom: 16px; }
+  .callout h3 { margin: 0 0 4px; }
+  .approval-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--border); flex-wrap: wrap; }
+  .approval-item:first-of-type { border-top: 0; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 12px 0; }
+  .tile { background: var(--well); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
+  .tile b { display: block; font-size: 1.4rem; font-family: "IBM Plex Mono", monospace; }
+  .tile span { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; }
+
   .row-actions { display: flex; gap: 6px; }
   .row-actions button {
     background: var(--well);
@@ -362,31 +374,45 @@
 
       <!-- Deliveries -->
       <div class="panel" id="rpanel-deliveries">
-        <p class="note-text">Expecting a courier? Auto-approve lets them in straight away; otherwise the guard approves or denies at the gate.</p>
-        <label>Approval</label>
-        <div class="segmented">
-          <button class="active" id="rp-d-auto">Auto-approve</button>
-          <button id="rp-d-manual">Guard decides</button>
+        <div class="callout hidden" id="rp-d-approval">
+          <h3 class="section-title" style="margin:0 0 4px;">Needs your approval</h3>
+          <p class="note-text" style="margin:0 0 6px;">A courier you didn't announce is at the gate. The guard is waiting for your answer.</p>
+          <div id="rp-d-approval-list"></div>
+        </div>
+
+        <p class="note-text">Expecting a delivery? Tell us the platform and when it should arrive, so the guard can let the courier in without calling you.</p>
+        <div class="field-grid">
+          <div>
+            <label for="rp-d-platform">Platform / courier company</label>
+            <input type="text" id="rp-d-platform" list="rp-d-platforms" placeholder="e.g. Amazon, Swiggy" autocomplete="off" />
+            <datalist id="rp-d-platforms">
+              <option value="Amazon"></option><option value="Flipkart"></option><option value="Swiggy"></option>
+              <option value="Zomato"></option><option value="Blinkit"></option><option value="Zepto"></option>
+              <option value="Meesho"></option><option value="Myntra"></option><option value="Dunzo"></option>
+            </datalist>
+          </div>
+          <div>
+            <label for="rp-d-note">What is it? (optional)</label>
+            <input type="text" id="rp-d-note" placeholder="e.g. Laptop box, dinner" />
+          </div>
         </div>
         <div class="field-grid">
           <div>
-            <label for="rp-d-courier">Courier name</label>
-            <input type="text" id="rp-d-courier" placeholder="e.g. Ramesh" />
+            <label for="rp-d-from">Expected from</label>
+            <input type="datetime-local" id="rp-d-from" />
           </div>
           <div>
-            <label for="rp-d-platform">Platform (optional)</label>
-            <input type="text" id="rp-d-platform" placeholder="e.g. Amazon, Swiggy" />
+            <label for="rp-d-until">Expected until</label>
+            <input type="datetime-local" id="rp-d-until" />
           </div>
         </div>
-        <label for="rp-d-purpose">Purpose (optional)</label>
-        <input type="text" id="rp-d-purpose" placeholder="e.g. Package delivery" />
-        <button class="action" id="rp-d-submit">Request Delivery</button>
+        <button class="action" id="rp-d-submit">Announce Delivery</button>
         <div class="inline-result hidden" id="rp-d-result"></div>
 
         <h3 class="section-title" style="margin-top:24px;">My Deliveries</h3>
         <button class="action secondary" id="rp-d-refresh" style="margin-top:0;margin-bottom:10px;">Refresh</button>
         <table>
-          <thead><tr><th>#</th><th>Courier</th><th>Mode</th><th>Requested</th><th>Status</th></tr></thead>
+          <thead><tr><th>#</th><th>Platform</th><th>When</th><th>Status</th><th>Action</th></tr></thead>
           <tbody id="rp-d-body"><tr class="empty-row"><td colspan="5">Loading...</td></tr></tbody>
         </table>
       </div>
@@ -522,15 +548,41 @@
 
     <!-- ---- Delivery panel ---- -->
     <div class="panel" id="panel-delivery">
-      <label>Approval mode</label>
-      <div class="segmented">
-        <button class="active" id="del-mode-auto" data-mode="AUTO">Auto-approve</button>
-        <button id="del-mode-manual" data-mode="MANUAL">Manual approval</button>
-      </div>
+      <p class="note-text">Residents announce the deliveries they expect. When a courier arrives, find the delivery below and let them in. If nobody announced it, log an unexpected arrival and the resident decides.</p>
 
+      <h3 class="section-title">Waiting at the gate</h3>
+      <div class="filter-row" style="grid-template-columns: 1fr auto; margin-top:6px;">
+        <input type="text" id="del-search" placeholder="Search platform, resident or flat number..." />
+        <button class="action secondary" id="btn-refresh-deliveries" style="margin:0;">Refresh</button>
+      </div>
+      <table>
+        <thead>
+          <tr><th>Platform</th><th>Resident</th><th>When</th><th>Status</th><th>Action</th></tr>
+        </thead>
+        <tbody id="del-open-body">
+          <tr class="empty-row"><td colspan="5">Loading...</td></tr>
+        </tbody>
+      </table>
+
+      <h3 class="section-title" style="margin-top:26px;">Unexpected arrival</h3>
+      <p class="note-text">Courier at the gate and nobody announced it? Log it here. The resident gets an approve / deny request.</p>
       <div class="field-grid">
         <div>
-          <label for="del-courier-name">Courier name</label>
+          <label for="del-host-search">Resident</label>
+          <div class="picker">
+            <input type="text" id="del-host-search" placeholder="Search by name or flat number" autocomplete="off" />
+            <input type="hidden" id="del-host" />
+            <div class="picker-list hidden" id="del-host-list"></div>
+          </div>
+        </div>
+        <div>
+          <label for="del-platform">Platform / company</label>
+          <input type="text" id="del-platform" placeholder="e.g. Amazon, Swiggy, Local" />
+        </div>
+      </div>
+      <div class="field-grid">
+        <div>
+          <label for="del-courier-name">Courier name (optional)</label>
           <input type="text" id="del-courier-name" placeholder="e.g. Ramesh" />
         </div>
         <div>
@@ -538,35 +590,10 @@
           <input type="text" id="del-courier-phone" placeholder="10-digit number" />
         </div>
       </div>
-
-      <div class="field-grid">
-        <div>
-          <label for="del-platform">Platform (optional)</label>
-          <input type="text" id="del-platform" placeholder="e.g. Amazon, Swiggy, Local" />
-        </div>
-        <div>
-          <label for="del-host">Host resident</label>
-          <select id="del-host"></select>
-        </div>
-      </div>
-
-      <label for="del-purpose">Purpose (optional)</label>
-      <input type="text" id="del-purpose" placeholder="e.g. Package delivery" />
-
-      <button class="action" id="btn-submit-delivery">Submit Delivery Request</button>
-
+      <label for="del-note">Note (optional)</label>
+      <input type="text" id="del-note" placeholder="e.g. Small brown box" />
+      <button class="action" id="btn-walkin-delivery">Ask Resident</button>
       <div class="inline-result hidden" id="del-result"></div>
-
-      <h3 class="section-title" style="margin-top:24px;">Pending Manual Approvals</h3>
-      <button class="action secondary" id="btn-refresh-deliveries" style="margin-top:0;margin-bottom:10px;">Refresh</button>
-      <table>
-        <thead>
-          <tr><th>#</th><th>Courier</th><th>Host</th><th>Requested</th><th>Status</th><th>Action</th></tr>
-        </thead>
-        <tbody id="pending-deliveries-body">
-          <tr class="empty-row"><td colspan="6">No pending deliveries yet.</td></tr>
-        </tbody>
-      </table>
     </div>
 
     <!-- ---- Staff panel ---- -->
@@ -582,6 +609,43 @@
 
       <button class="action" id="btn-verify-staff">Verify Staff</button>
     </div>
+  </div>
+
+  <!-- ===================== DELIVERIES OVERVIEW CARD (admin only) ===================== -->
+  <div class="card" id="deliveries-card">
+    <h2 class="section-title">Deliveries</h2>
+    <p class="note-text">Everything residents have announced and everything the guards have handled. As admin you can also approve or deny an unexpected arrival for a resident, or cancel an open delivery.</p>
+    <div class="tiles" id="del-tiles"></div>
+    <div class="note-text" id="del-top-platforms" style="margin:0 0 6px;"></div>
+
+    <div class="filter-row">
+      <input type="text" id="delh-search" placeholder="Search platform, courier, resident, flat..." />
+      <select id="delh-status">
+        <option value="">All statuses</option>
+        <option value="EXPECTED">Expected</option>
+        <option value="AWAITING_APPROVAL">Awaiting resident</option>
+        <option value="APPROVED">Approved</option>
+        <option value="ADMITTED">Let in</option>
+        <option value="DENIED">Refused / denied</option>
+        <option value="CANCELLED">Cancelled</option>
+        <option value="EXPIRED">Expired</option>
+      </select>
+      <select id="delh-days">
+        <option value="1">Last 24 hours</option>
+        <option value="7" selected>Last 7 days</option>
+        <option value="30">Last 30 days</option>
+        <option value="">All time</option>
+      </select>
+    </div>
+    <div class="note-text" id="delh-count" style="margin:10px 0 0;"></div>
+    <table>
+      <thead>
+        <tr><th>#</th><th>Resident</th><th>Platform / courier</th><th>Type</th><th>When</th><th>Status</th><th>Action</th></tr>
+      </thead>
+      <tbody id="delh-body">
+        <tr class="empty-row"><td colspan="7">Loading...</td></tr>
+      </tbody>
+    </table>
   </div>
 
   <!-- ===================== COMPLAINTS CARD (admin only) ===================== -->
@@ -938,6 +1002,7 @@
   }
 
   const hostPicker = makeResidentPicker("reg-host");
+  const walkinPicker = makeResidentPicker("del-host");
 
   async function loadResidents() {
     const result = await getJSON("/residents");
@@ -946,18 +1011,6 @@
     allResidents = residents;
     residentsById = {};
     residents.forEach(function (r) { residentsById[r.id] = r; });
-
-    ["del-host"].forEach(function (id) {
-      const sel = $(id);
-      if (!sel) return;
-      sel.innerHTML = "";
-      residents.forEach(function (r) {
-        const opt = document.createElement("option");
-        opt.value = r.id;
-        opt.textContent = r.name + " (" + r.apartment_no + ")";
-        sel.appendChild(opt);
-      });
-    });
 
     // Staff employer dropdown is optional (security guards are often
     // society-employed, not tied to one resident), so it gets a blank
@@ -1110,110 +1163,195 @@
     hostPicker.reset();
   });
 
-  // ---- Delivery tab
-  let deliveryMode = "AUTO";
-  const delModeAuto = $("del-mode-auto");
-  const delModeManual = $("del-mode-manual");
+  // ---- Delivery tab (v7.0): residents announce, the guard matches arrivals
+  function deliveryWhen(d) {
+    if (d.source === "WALK_IN") return "Arrived " + fmtTime(d.requested_at);
+    return fmtTime(d.expected_from) + " → " + fmtTime(d.expected_until);
+  }
 
-  delModeAuto.addEventListener("click", function () {
-    deliveryMode = "AUTO";
-    delModeAuto.classList.add("active");
-    delModeManual.classList.remove("active");
-  });
-  delModeManual.addEventListener("click", function () {
-    deliveryMode = "MANUAL";
-    delModeManual.classList.add("active");
-    delModeAuto.classList.remove("active");
-  });
+  function deliveryWho(d) {
+    let extra = [];
+    if (d.courier_name) extra.push(esc(d.courier_name));
+    if (d.courier_phone) extra.push(esc(d.courier_phone));
+    if (d.description) extra.push(esc(d.description));
+    return "<strong>" + esc(d.platform || "—") + "</strong>" +
+      (extra.length ? '<div class="note-text" style="margin:2px 0 0;">' + extra.join(" · ") + "</div>" : "");
+  }
 
-  $("btn-submit-delivery").addEventListener("click", async function () {
-    const resultBox = $("del-result");
-    resultBox.classList.add("hidden");
+  const STATUS_LABEL = {
+    EXPECTED: "Expected", AWAITING_APPROVAL: "Awaiting resident", APPROVED: "Approved",
+    ADMITTED: "Let in", DENIED: "Denied", CANCELLED: "Cancelled", EXPIRED: "Expired",
+  };
+  function deliveryBadge(status) {
+    return '<span class="badge ' + String(status).toLowerCase() + '">' + esc(STATUS_LABEL[status] || status) + "</span>";
+  }
 
-    const courierName = $("del-courier-name").value.trim();
-    const courierPhone = $("del-courier-phone").value.trim();
-    const platform = $("del-platform").value.trim();
-    const hostSelect = $("del-host");
-    const hostId = hostSelect.value ? parseInt(hostSelect.value, 10) : null;
-    const purpose = $("del-purpose").value.trim();
+  let openDeliveries = [];
 
-    if (!courierName || !hostId) {
-      resultBox.classList.remove("hidden");
-      resultBox.textContent = "Please fill in courier name and host resident.";
+  function renderOpenDeliveries() {
+    const body = $("del-open-body");
+    const q = $("del-search").value.trim().toLowerCase();
+    const rows = openDeliveries.filter(function (d) {
+      if (!q) return true;
+      return [d.platform || "", d.courier_name || "", d.description || "", residentLabel(d.host_resident_id)].join(" ").toLowerCase().indexOf(q) !== -1;
+    });
+    if (rows.length === 0) {
+      body.innerHTML = emptyRow(5, openDeliveries.length ? "No waiting deliveries match your search." : "No deliveries waiting right now.");
       return;
     }
-
-    const payload = {
-      courier_name: courierName,
-      courier_phone: courierPhone || null,
-      platform: platform || null,
-      host_resident_id: hostId,
-      purpose: purpose || null,
-      approval_mode: deliveryMode,
-    };
-
-    const result = await postJSON("/deliveries", payload);
-    resultBox.classList.remove("hidden");
-    if (!result.ok) {
-      resultBox.innerHTML = "Submission failed: " + esc(result.error);
-      return;
-    }
-
-    const delivery = result.data;
-    if (delivery.status === "APPROVED") {
-      resultBox.innerHTML = "Delivery for <strong>" + esc(delivery.courier_name) + "</strong> auto-approved. Access granted.";
-      setStatus("granted", "DELIVERY APPROVED", delivery.courier_name + " — auto-approved.");
-    } else {
-      resultBox.innerHTML = "Delivery for <strong>" + esc(delivery.courier_name) + "</strong> submitted and awaiting manual approval below.";
-      setStatus("idle", "AWAITING APPROVAL", delivery.courier_name + " — pending manual decision.");
-    }
-
-    await loadPendingDeliveries();
-  });
-
-  async function loadPendingDeliveries() {
-    const body = $("pending-deliveries-body");
-    const result = await getJSON("/deliveries");
-    if (!result.ok) {
-      body.innerHTML = emptyRow(6, "Could not load deliveries: " + result.error);
-      return;
-    }
-    const pending = result.data.filter(function (d) { return d.approval_mode === "MANUAL" && d.status === "PENDING"; });
-    if (pending.length === 0) {
-      body.innerHTML = emptyRow(6, "No pending deliveries right now.");
-      return;
-    }
-    body.innerHTML = pending.map(function (d) {
+    body.innerHTML = rows.map(function (d) {
       const id = Number(d.id);
+      let actions;
+      if (d.status === "AWAITING_APPROVAL") {
+        actions = '<span class="note-text" style="margin:0;align-self:center;">Waiting for resident</span><button class="deny" data-refuse-id="' + id + '">Refuse</button>';
+      } else {
+        actions = '<button class="approve" data-admit-id="' + id + '">Let in</button><button class="deny" data-refuse-id="' + id + '">Refuse</button>';
+      }
       return "<tr>" +
-        "<td>" + id + "</td>" +
-        "<td>" + esc(d.courier_name) + (d.platform ? " (" + esc(d.platform) + ")" : "") + "</td>" +
+        "<td>" + deliveryWho(d) + "</td>" +
         "<td>" + esc(residentLabel(d.host_resident_id)) + "</td>" +
-        "<td>" + esc(fmtTime(d.requested_at)) + "</td>" +
-        "<td>" + badge(d.status) + "</td>" +
-        '<td class="row-actions">' +
-          '<button class="approve" data-id="' + id + '" data-approve="true">Approve</button>' +
-          '<button class="deny" data-id="' + id + '" data-approve="false">Deny</button>' +
-        "</td>" +
+        "<td>" + esc(deliveryWhen(d)) + "</td>" +
+        "<td>" + deliveryBadge(d.status) + "</td>" +
+        '<td class="row-actions">' + actions + "</td>" +
       "</tr>";
     }).join("");
 
-    body.querySelectorAll("button[data-id]").forEach(function (btn) {
+    body.querySelectorAll("button[data-admit-id]").forEach(function (btn) {
       btn.addEventListener("click", async function () {
-        const id = btn.getAttribute("data-id");
-        const approve = btn.getAttribute("data-approve") === "true";
-        const result = await postJSON("/deliveries/" + id + "/decision", { approve: approve, gate_name: "MAIN_GATE" });
-        if (!result.ok) {
-          setStatus("denied", "ERROR", result.error);
-          return;
-        }
-        setStatus(approve ? "granted" : "denied", approve ? "DELIVERY APPROVED" : "DELIVERY DENIED", result.data.courier_name);
-        await loadPendingDeliveries();
+        const d = openDeliveries.find(function (x) { return String(x.id) === btn.getAttribute("data-admit-id"); });
+        const result = await postJSON("/deliveries/" + btn.getAttribute("data-admit-id") + "/admit", { gate_name: "MAIN_GATE" });
+        if (!result.ok) { setStatus("denied", "CANNOT LET IN", result.error); await refreshDeliveries(); return; }
+        setStatus("granted", "DELIVERY ADMITTED", (d && d.platform ? d.platform + " — " : "") + (d ? residentLabel(d.host_resident_id) : ""));
+        await refreshDeliveries();
+      });
+    });
+    body.querySelectorAll("button[data-refuse-id]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        const result = await postJSON("/deliveries/" + btn.getAttribute("data-refuse-id") + "/refuse", { gate_name: "MAIN_GATE" });
+        if (!result.ok) { setStatus("denied", "ERROR", result.error); await refreshDeliveries(); return; }
+        setStatus("denied", "DELIVERY REFUSED", result.data.platform || "Courier turned away.");
+        await refreshDeliveries();
       });
     });
   }
 
-  $("btn-refresh-deliveries").addEventListener("click", loadPendingDeliveries);
+  async function loadOpenDeliveries() {
+    const result = await getJSON("/deliveries?needs_action=true");
+    if (!result.ok) {
+      $("del-open-body").innerHTML = emptyRow(5, "Could not load deliveries: " + result.error);
+      return;
+    }
+    openDeliveries = result.data;
+    renderOpenDeliveries();
+  }
+
+  $("del-search").addEventListener("input", renderOpenDeliveries);
+  $("btn-refresh-deliveries").addEventListener("click", refreshDeliveries);
+
+  $("btn-walkin-delivery").addEventListener("click", async function () {
+    const box = $("del-result");
+    box.classList.remove("hidden");
+    const hostId = $("del-host").value ? parseInt($("del-host").value, 10) : null;
+    const platform = $("del-platform").value.trim();
+    const courier = $("del-courier-name").value.trim();
+    if (!hostId) { box.textContent = "Please choose the resident (search by name or flat number)."; return; }
+    if (!platform && !courier) { box.textContent = "Enter the platform or the courier's name."; return; }
+
+    const result = await postJSON("/deliveries/walk-in", {
+      host_resident_id: hostId,
+      platform: platform || null,
+      courier_name: courier || null,
+      courier_phone: $("del-courier-phone").value.trim() || null,
+      description: $("del-note").value.trim() || null,
+    });
+    if (!result.ok) { box.innerHTML = "Could not log it: " + esc(result.error); return; }
+    box.innerHTML = "Asked <strong>" + esc(residentLabel(hostId)) + "</strong> to approve. It will show above as <em>Awaiting resident</em>.";
+    setStatus("idle", "WAITING FOR RESIDENT", (platform || courier) + " — " + residentLabel(hostId));
+    walkinPicker.reset();
+    ["del-platform", "del-courier-name", "del-courier-phone", "del-note"].forEach(function (id) { $(id).value = ""; });
+    await refreshDeliveries();
+  });
+
+  // ---- Admin overview: summary tiles + searchable history with overrides
+  let deliveryHistory = [];
+
+  async function loadDeliveryOverview() {
+    const sum = await getJSON("/deliveries/summary");
+    if (sum.ok) {
+      const p = sum.data.pending_now || {}, l = sum.data.last_24h || {};
+      const tiles = [
+        ["Expected now", p.EXPECTED || 0], ["Awaiting resident", p.AWAITING_APPROVAL || 0],
+        ["Let in (24h)", l.ADMITTED || 0], ["Refused (24h)", l.DENIED || 0], ["Total (24h)", l.TOTAL || 0],
+      ];
+      $("del-tiles").innerHTML = tiles.map(function (t) { return '<div class="tile"><b>' + Number(t[1]) + "</b><span>" + esc(t[0]) + "</span></div>"; }).join("");
+      const tops = sum.data.top_platforms_24h || [];
+      $("del-top-platforms").textContent = tops.length
+        ? "Busiest platforms (24h): " + tops.map(function (t) { return t.platform + " (" + t.count + ")"; }).join(", ")
+        : "No deliveries in the last 24 hours.";
+    }
+    const params = [];
+    if ($("delh-status").value) params.push("status=" + encodeURIComponent($("delh-status").value));
+    if ($("delh-days").value) params.push("days=" + encodeURIComponent($("delh-days").value));
+    params.push("limit=500");
+    const hist = await getJSON("/deliveries?" + params.join("&"));
+    if (!hist.ok) { $("delh-body").innerHTML = emptyRow(7, "Could not load deliveries: " + hist.error); return; }
+    deliveryHistory = hist.data;
+    renderDeliveryHistory();
+  }
+
+  function renderDeliveryHistory() {
+    const body = $("delh-body");
+    const q = $("delh-search").value.trim().toLowerCase();
+    const rows = deliveryHistory.filter(function (d) {
+      if (!q) return true;
+      return [d.platform || "", d.courier_name || "", d.description || "", residentLabel(d.host_resident_id)].join(" ").toLowerCase().indexOf(q) !== -1;
+    });
+    $("delh-count").textContent = "Showing " + rows.length + " of " + deliveryHistory.length;
+    if (rows.length === 0) { body.innerHTML = emptyRow(7, deliveryHistory.length ? "No deliveries match your search." : "No deliveries in this period."); return; }
+    body.innerHTML = rows.map(function (d) {
+      const id = Number(d.id);
+      let actions = "—";
+      if (d.status === "AWAITING_APPROVAL") {
+        actions = '<button class="approve" data-ov-approve="' + id + '">Approve</button><button class="deny" data-ov-deny="' + id + '">Deny</button>';
+      } else if (d.status === "EXPECTED" || d.status === "APPROVED") {
+        actions = '<button data-ov-cancel="' + id + '">Cancel</button>';
+      }
+      return "<tr>" +
+        "<td>" + id + "</td>" +
+        "<td>" + esc(residentLabel(d.host_resident_id)) + "</td>" +
+        "<td>" + deliveryWho(d) + "</td>" +
+        "<td>" + esc(d.source === "WALK_IN" ? "Unexpected" : "Announced") + "</td>" +
+        "<td>" + esc(deliveryWhen(d)) + "</td>" +
+        "<td>" + deliveryBadge(d.status) + "</td>" +
+        '<td class="row-actions">' + actions + "</td>" +
+      "</tr>";
+    }).join("");
+
+    async function act(path, payload) {
+      const result = await postJSON(path, payload);
+      if (!result.ok) alert("Could not update delivery: " + result.error);
+      await refreshDeliveries();
+    }
+    body.querySelectorAll("button[data-ov-approve]").forEach(function (b) { b.addEventListener("click", function () { act("/deliveries/" + b.getAttribute("data-ov-approve") + "/decision", { approve: true }); }); });
+    body.querySelectorAll("button[data-ov-deny]").forEach(function (b) { b.addEventListener("click", function () { act("/deliveries/" + b.getAttribute("data-ov-deny") + "/decision", { approve: false }); }); });
+    body.querySelectorAll("button[data-ov-cancel]").forEach(function (b) { b.addEventListener("click", function () { act("/deliveries/" + b.getAttribute("data-ov-cancel") + "/cancel"); }); });
+  }
+
+  $("delh-search").addEventListener("input", renderDeliveryHistory);
+  $("delh-status").addEventListener("change", loadDeliveryOverview);
+  $("delh-days").addEventListener("change", loadDeliveryOverview);
+
+  async function refreshDeliveries() {
+    await loadOpenDeliveries();
+    if (isAdmin) await loadDeliveryOverview();
+  }
+
+  // Keep the gate screen fresh without anyone pressing Refresh.
+  setInterval(function () {
+    if (document.hidden) return;
+    if (!$("staff-view").classList.contains("hidden") && $("panel-delivery").classList.contains("active")) refreshDeliveries();
+    if (!$("resident-view").classList.contains("hidden") && $("rpanel-deliveries").classList.contains("active")) loadMyDeliveries();
+  }, 10000);
 
   // ---- Complaint photos need the auth header, so they are fetched with it
   // and shown from a temporary blob URL (a plain <img src> can't send it).
@@ -1496,13 +1634,15 @@
     // Guards run the gate only: no complaints management, and the staff
     // directory is read-only for them (no registration, no block/unblock).
     $("complaints-card").classList.toggle("hidden", !isAdmin);
+    $("deliveries-card").classList.toggle("hidden", !isAdmin);
     $("staffreg-form").classList.toggle("hidden", !isAdmin);
     $("staff-view").classList.remove("hidden");
 
     await loadResidents();
-    await loadPendingDeliveries();
+    await loadOpenDeliveries();
     await loadStaffDirectory();
     if (isAdmin) {
+      await loadDeliveryOverview();
       await loadComplaintCategories();
       fillCategorySelect("comp-category", "Select a category...");
       fillCategorySelect("comp-filter-category", "All categories");
@@ -1574,32 +1714,63 @@
     await loadMyVisitors();
   });
 
-  let rpDeliveryMode = "AUTO";
-  $("rp-d-auto").addEventListener("click", function () {
-    rpDeliveryMode = "AUTO";
-    $("rp-d-auto").classList.add("active");
-    $("rp-d-manual").classList.remove("active");
-  });
-  $("rp-d-manual").addEventListener("click", function () {
-    rpDeliveryMode = "MANUAL";
-    $("rp-d-manual").classList.add("active");
-    $("rp-d-auto").classList.remove("active");
-  });
+  // ---- Resident deliveries (v7.0): announce what you expect, answer unexpected arrivals
+  function toLocalInput(d) {
+    const pad = function (n) { return String(n).padStart(2, "0"); };
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
+  }
+  function defaultDeliveryWindow() {
+    const now = new Date();
+    $("rp-d-from").value = toLocalInput(now);
+    $("rp-d-until").value = toLocalInput(new Date(now.getTime() + 4 * 3600 * 1000));
+  }
+  defaultDeliveryWindow();
+
+  let myDeliveries = [];
+
+  async function decideDelivery(id, approve) {
+    const result = await postJSON("/deliveries/" + id + "/decision", { approve: approve });
+    if (!result.ok) alert("Could not send your answer: " + result.error);
+    await loadMyDeliveries();
+  }
 
   async function loadMyDeliveries() {
     const body = $("rp-d-body");
     const result = await getJSON("/deliveries");
     if (!result.ok) { body.innerHTML = emptyRow(5, "Could not load deliveries: " + result.error); return; }
-    if (result.data.length === 0) { body.innerHTML = emptyRow(5, "No delivery requests yet."); return; }
-    body.innerHTML = result.data.map(function (d) {
+    myDeliveries = result.data;
+
+    // Unexpected couriers the guard is waiting on come first, in a highlighted box.
+    const waiting = myDeliveries.filter(function (d) { return d.status === "AWAITING_APPROVAL"; });
+    $("rp-d-approval").classList.toggle("hidden", waiting.length === 0);
+    $("rp-d-approval-list").innerHTML = waiting.map(function (d) {
+      const id = Number(d.id);
+      return '<div class="approval-item"><div>' + deliveryWho(d) +
+        '<div class="note-text" style="margin:2px 0 0;">At the gate since ' + esc(fmtTime(d.requested_at)) + "</div></div>" +
+        '<div class="row-actions"><button class="approve" data-yes="' + id + '">Approve</button><button class="deny" data-no="' + id + '">Deny</button></div></div>';
+    }).join("");
+    $("rp-d-approval-list").querySelectorAll("button[data-yes]").forEach(function (b) { b.addEventListener("click", function () { decideDelivery(b.getAttribute("data-yes"), true); }); });
+    $("rp-d-approval-list").querySelectorAll("button[data-no]").forEach(function (b) { b.addEventListener("click", function () { decideDelivery(b.getAttribute("data-no"), false); }); });
+
+    if (myDeliveries.length === 0) { body.innerHTML = emptyRow(5, "Nothing announced yet."); return; }
+    body.innerHTML = myDeliveries.map(function (d) {
+      const id = Number(d.id);
+      const open = d.status === "EXPECTED" || d.status === "AWAITING_APPROVAL" || d.status === "APPROVED";
       return "<tr>" +
-        "<td>" + Number(d.id) + "</td>" +
-        "<td>" + esc(d.courier_name) + (d.platform ? " (" + esc(d.platform) + ")" : "") + "</td>" +
-        "<td>" + esc(d.approval_mode === "AUTO" ? "Auto" : "Guard decides") + "</td>" +
-        "<td>" + esc(fmtTime(d.requested_at)) + "</td>" +
-        "<td>" + badge(d.status) + "</td>" +
+        "<td>" + id + "</td>" +
+        "<td>" + deliveryWho(d) + "</td>" +
+        "<td>" + esc(deliveryWhen(d)) + "</td>" +
+        "<td>" + deliveryBadge(d.status) + "</td>" +
+        '<td class="row-actions">' + (open ? '<button data-cancel-id="' + id + '">Cancel</button>' : "—") + "</td>" +
       "</tr>";
     }).join("");
+    body.querySelectorAll("button[data-cancel-id]").forEach(function (b) {
+      b.addEventListener("click", async function () {
+        const result = await postJSON("/deliveries/" + b.getAttribute("data-cancel-id") + "/cancel");
+        if (!result.ok) alert("Could not cancel: " + result.error);
+        await loadMyDeliveries();
+      });
+    });
   }
 
   $("rp-d-refresh").addEventListener("click", loadMyDeliveries);
@@ -1607,24 +1778,26 @@
   $("rp-d-submit").addEventListener("click", async function () {
     const box = $("rp-d-result");
     box.classList.remove("hidden");
-    const courier = $("rp-d-courier").value.trim();
-    if (!courier) { box.textContent = "Please enter the courier name."; return; }
-    const payload = {
-      courier_name: courier,
-      platform: $("rp-d-platform").value.trim() || null,
+    const platform = $("rp-d-platform").value.trim();
+    const fromRaw = $("rp-d-from").value, untilRaw = $("rp-d-until").value;
+    if (!platform) { box.textContent = "Please enter the platform or courier company."; return; }
+    if (!fromRaw || !untilRaw) { box.textContent = "Please set when you expect it (from and until)."; return; }
+    const from = new Date(fromRaw), until = new Date(untilRaw);
+    if (until <= from) { box.textContent = "'Expected until' must be after 'Expected from'."; return; }
+    if (until <= new Date()) { box.textContent = "That time window has already passed."; return; }
+
+    const result = await postJSON("/deliveries/announce", {
       host_resident_id: currentUser.resident_id,
-      purpose: $("rp-d-purpose").value.trim() || null,
-      approval_mode: rpDeliveryMode,
-    };
-    const result = await postJSON("/deliveries", payload);
-    if (!result.ok) { box.innerHTML = "Request failed: " + esc(result.error); return; }
-    const d = result.data;
-    box.innerHTML = d.status === "APPROVED"
-      ? "Delivery for <strong>" + esc(d.courier_name) + "</strong> auto-approved."
-      : "Delivery for <strong>" + esc(d.courier_name) + "</strong> is waiting for the guard's decision.";
-    $("rp-d-courier").value = "";
+      platform: platform,
+      description: $("rp-d-note").value.trim() || null,
+      expected_from: from.toISOString(),
+      expected_until: until.toISOString(),
+    });
+    if (!result.ok) { box.innerHTML = "Could not announce: " + esc(result.error); return; }
+    box.innerHTML = "Done. The guard will let <strong>" + esc(result.data.platform) + "</strong> in between " + esc(deliveryWhen(result.data)) + ".";
     $("rp-d-platform").value = "";
-    $("rp-d-purpose").value = "";
+    $("rp-d-note").value = "";
+    defaultDeliveryWindow();
     await loadMyDeliveries();
   });
 

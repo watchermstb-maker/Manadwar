@@ -42,15 +42,19 @@ class EntryMethod(str, enum.Enum):
     STAFF = "STAFF"
 
 
-class ApprovalMode(str, enum.Enum):
-    MANUAL = "MANUAL"
-    AUTO = "AUTO"
+class DeliverySource(str, enum.Enum):
+    ANNOUNCED = "ANNOUNCED"  # resident told us to expect it
+    WALK_IN = "WALK_IN"      # courier turned up unannounced; guard logged it
 
 
 class DeliveryStatus(str, enum.Enum):
-    PENDING = "PENDING"
-    APPROVED = "APPROVED"
-    DENIED = "DENIED"
+    EXPECTED = "EXPECTED"                    # announced; waiting for the courier
+    AWAITING_APPROVAL = "AWAITING_APPROVAL"  # unexpected arrival; resident must decide
+    APPROVED = "APPROVED"                    # resident approved the unexpected arrival
+    ADMITTED = "ADMITTED"                    # guard let the courier in
+    DENIED = "DENIED"                        # resident denied, or guard refused
+    CANCELLED = "CANCELLED"                  # resident/admin cancelled it
+    EXPIRED = "EXPIRED"                      # window passed / nobody answered in time
 
 
 class BillStatus(str, enum.Enum):
@@ -166,15 +170,19 @@ class Delivery(Base):
     __tablename__ = "deliveries"
 
     id = Column(Integer, primary_key=True, index=True)
-    courier_name = Column(String, nullable=False)
-    courier_phone = Column(String, nullable=True)
-    platform = Column(String, nullable=True)
     host_resident_id = Column(Integer, ForeignKey("residents.id"), nullable=False)
-    purpose = Column(String, nullable=True)
-    approval_mode = Column(SAEnum(ApprovalMode), nullable=False)
-    status = Column(SAEnum(DeliveryStatus), nullable=False, default=DeliveryStatus.PENDING)
-    requested_at = Column(DateTime, default=datetime.utcnow)
-    decided_at = Column(DateTime, nullable=True)
+    source = Column(SAEnum(DeliverySource), nullable=False)
+    platform = Column(String, nullable=True)       # e.g. Amazon, Swiggy
+    courier_name = Column(String, nullable=True)   # unknown for announced deliveries
+    courier_phone = Column(String, nullable=True)
+    description = Column(String, nullable=True)    # parcel note, e.g. "Laptop box"
+    # Announced deliveries: the window the resident expects it in (naive UTC).
+    expected_from = Column(DateTime, nullable=True)
+    expected_until = Column(DateTime, nullable=True)
+    status = Column(SAEnum(DeliveryStatus), nullable=False)
+    requested_at = Column(DateTime, default=datetime.utcnow)  # when announced / logged
+    decided_at = Column(DateTime, nullable=True)   # resident's approve/deny time
+    admitted_at = Column(DateTime, nullable=True)  # when the guard let them in
 
     host_resident = relationship("Resident")
 

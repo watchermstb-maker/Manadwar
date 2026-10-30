@@ -13,12 +13,12 @@ check_schema()
 app = FastAPI(
     title="ManaDwar - Access Control API",
     description=(
-        "RFID vehicle access control, OTP visitor entry, delivery approval, "
+        "RFID vehicle access control, OTP visitor entry, delivery announcements, "
         "maintenance/complaints, general staff (house help/driver/"
         "security) access, and JWT-based authentication with ADMIN/GUARD/"
         "RESIDENT roles, for a smart-community gate system."
     ),
-    version="6.0.0",
+    version="7.0.0",
 )
 app.include_router(auth.router)
 app.include_router(rfid.router)
