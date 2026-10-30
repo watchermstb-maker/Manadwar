@@ -25,3 +25,29 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def check_schema():
+    """Fail early, with a clear message, if the database file predates the code.
+
+    create_all() only creates missing tables; it never adds columns to
+    existing ones. Without this check, an old manadwar.db shows up as
+    confusing 500 errors ("no such column") at request time instead.
+    """
+    from sqlalchemy import inspect
+
+    inspector = inspect(engine)
+    problems = []
+    for table in Base.metadata.sorted_tables:
+        if not inspector.has_table(table.name):
+            continue
+        existing = {col["name"] for col in inspector.get_columns(table.name)}
+        missing = [col.name for col in table.columns if col.name not in existing]
+        if missing:
+            problems.append(f"{table.name}: {', '.join(missing)}")
+    if problems:
+        raise RuntimeError(
+            "Your database file is from an older version of ManaDwar (missing columns -> "
+            + "; ".join(problems)
+            + "). Stop the server, delete manadwar.db, run `python -m app.seed`, then start again."
+        )

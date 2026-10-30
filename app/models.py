@@ -206,8 +206,15 @@ class Complaint(Base):
     raised_at = Column(DateTime, default=datetime.utcnow)
     resolved_at = Column(DateTime, nullable=True)
     resolution_notes = Column(String, nullable=True)
+    # Server-generated filename of an optional photo under the uploads
+    # folder (never a client-supplied name or path).
+    image_path = Column(String, nullable=True)
 
     resident = relationship("Resident")
+
+    @property
+    def has_image(self) -> bool:
+        return bool(self.image_path)
 
 
 class User(Base):

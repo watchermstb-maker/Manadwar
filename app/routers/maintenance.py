@@ -1,7 +1,11 @@
+import os
+import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -11,6 +15,26 @@ from ..database import get_db
 router = APIRouter(tags=["Maintenance: Bills & Complaints"])
 
 _admin_only = require_roles(models.UserRole.ADMIN)
+
+# Complaint photos live on disk (not in the database). Override the folder
+# with UPLOAD_DIR in .env if you want them elsewhere.
+UPLOAD_DIR = Path(
+    os.getenv("UPLOAD_DIR") or (Path(__file__).resolve().parent.parent.parent / "uploads")
+) / "complaints"
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
+_IMAGE_MEDIA_TYPES = {"jpg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
+
+
+def _detect_image_type(head: bytes) -> Optional[str]:
+    """Identify the real file type from its first bytes (never trust the
+    client-supplied filename or Content-Type)."""
+    if head.startswith(b"\xff\xd8\xff"):
+        return "jpg"
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "png"
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return "webp"
+    return None
 
 
 def _validate_billing_month(value: str) -> None:
@@ -165,6 +189,7 @@ def update_complaint_status(
 def list_complaints(
     resident_id: Optional[int] = None,
     status: Optional[models.ComplaintStatus] = None,
+    category: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
@@ -178,4 +203,79 @@ def list_complaints(
         query = query.filter(models.Complaint.resident_id == resident_id)
     if status is not None:
         query = query.filter(models.Complaint.status == status)
+    if category is not None:
+        query = query.filter(models.Complaint.category == category)
     return query.order_by(models.Complaint.raised_at.desc()).all()
+
+
+@router.get("/complaints/categories", response_model=List[str])
+def list_complaint_categories(current_user: models.User = Depends(get_current_user)):
+    return schemas.COMPLAINT_CATEGORIES
+
+
+def _accessible_complaint(db: Session, complaint_id: int, current_user: models.User) -> models.Complaint:
+    complaint = db.query(models.Complaint).filter(models.Complaint.id == complaint_id).first()
+    if complaint is None:
+        raise HTTPException(status_code=404, detail="Complaint not found.")
+    if current_user.role == models.UserRole.RESIDENT:
+        if complaint.resident_id != current_user.resident_id:
+            raise HTTPException(status_code=403, detail="You can only access your own complaints.")
+    elif current_user.role != models.UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="You don't have permission to do this.")
+    return complaint
+
+
+@router.post("/complaints/{complaint_id}/image", response_model=schemas.ComplaintOut)
+def upload_complaint_image(
+    complaint_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    complaint = _accessible_complaint(db, complaint_id, current_user)
+    if complaint.status == models.ComplaintStatus.RESOLVED:
+        raise HTTPException(status_code=400, detail="This complaint is already resolved.")
+
+    data = file.file.read(MAX_IMAGE_BYTES + 1)
+    if len(data) > MAX_IMAGE_BYTES:
+        raise HTTPException(status_code=413, detail="Image is larger than 5 MB.")
+    if not data:
+        raise HTTPException(status_code=400, detail="The uploaded file is empty.")
+    kind = _detect_image_type(data[:16])
+    if kind is None:
+        raise HTTPException(status_code=400, detail="Only JPG, PNG or WebP images are allowed.")
+
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    filename = f"{uuid.uuid4().hex}.{kind}"
+    (UPLOAD_DIR / filename).write_bytes(data)
+
+    previous = complaint.image_path
+    complaint.image_path = filename
+    db.commit()
+    db.refresh(complaint)
+    if previous:
+        try:
+            (UPLOAD_DIR / previous).unlink()
+        except OSError:
+            pass
+    return complaint
+
+
+@router.get("/complaints/{complaint_id}/image")
+def get_complaint_image(
+    complaint_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    complaint = _accessible_complaint(db, complaint_id, current_user)
+    name = complaint.image_path
+    if not name or Path(name).name != name:
+        raise HTTPException(status_code=404, detail="This complaint has no photo.")
+    path = UPLOAD_DIR / name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="This complaint has no photo.")
+    return FileResponse(
+        path,
+        media_type=_IMAGE_MEDIA_TYPES.get(path.suffix.lstrip("."), "application/octet-stream"),
+        headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=300"},
+    )

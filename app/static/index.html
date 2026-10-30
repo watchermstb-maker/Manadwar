@@ -245,6 +245,13 @@
   .note-text { color: var(--muted); font-size: 0.8rem; margin: 0 0 12px; line-height: 1.5; }
   .badge.used { background: var(--info-dim); color: var(--info); }
 
+  .filter-row { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; margin-top: 12px; }
+  .photo-preview { display: block; max-width: 220px; max-height: 160px; margin-top: 10px; border-radius: 6px; border: 1px solid var(--border); }
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.82); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+  .modal-body { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; max-width: 920px; }
+  .modal-body img { max-width: 100%; max-height: 80vh; border-radius: 8px; border: 1px solid var(--border); background: var(--well); }
+  @media (max-width: 640px) { .filter-row { grid-template-columns: 1fr; } }
+
   .picker { position: relative; }
   .picker-list {
     position: absolute; left: 0; right: 0; top: 100%; margin-top: 2px; z-index: 20;
@@ -297,7 +304,6 @@
         <button class="tab-btn active" id="rtab-visitors" data-rpanel="rpanel-visitors">Visitors</button>
         <button class="tab-btn" id="rtab-deliveries" data-rpanel="rpanel-deliveries">Deliveries</button>
         <button class="tab-btn" id="rtab-complaints" data-rpanel="rpanel-complaints">Complaints</button>
-        <button class="tab-btn" id="rtab-bills" data-rpanel="rpanel-bills">Bills</button>
       </div>
 
       <!-- Visitors -->
@@ -387,26 +393,20 @@
 
       <!-- Complaints -->
       <div class="panel" id="rpanel-complaints">
-        <label for="rp-c-category">Category (optional)</label>
-        <input type="text" id="rp-c-category" placeholder="e.g. Plumbing, Electrical" />
+        <label for="rp-c-category">Category</label>
+        <select id="rp-c-category"></select>
         <label for="rp-c-description">Description</label>
         <textarea id="rp-c-description" rows="3" placeholder="Describe the issue"></textarea>
+        <label for="rp-c-photo">Photo (optional: JPG, PNG or WebP, up to 5 MB)</label>
+        <input type="file" id="rp-c-photo" accept="image/jpeg,image/png,image/webp" />
+        <img id="rp-c-preview" class="photo-preview hidden" alt="Selected photo preview" />
         <button class="action" id="rp-c-submit">Raise Complaint</button>
         <div class="inline-result hidden" id="rp-c-result"></div>
 
         <h3 class="section-title" style="margin-top:24px;">My Complaints</h3>
         <table>
-          <thead><tr><th>#</th><th>Category</th><th>Description</th><th>Status</th><th>Admin notes</th></tr></thead>
-          <tbody id="rp-c-body"><tr class="empty-row"><td colspan="5">Loading...</td></tr></tbody>
-        </table>
-      </div>
-
-      <!-- Bills -->
-      <div class="panel" id="rpanel-bills">
-        <p class="note-text">No real payment gateway is connected in this pilot. "Mark as paid" records that you have paid (with an optional reference such as a UPI transaction ID) so the admin can see it.</p>
-        <table>
-          <thead><tr><th>Month</th><th>Amount</th><th>Due</th><th>Status</th><th>Action</th></tr></thead>
-          <tbody id="rp-b-body"><tr class="empty-row"><td colspan="5">Loading...</td></tr></tbody>
+          <thead><tr><th>#</th><th>Category</th><th>Description</th><th>Photo</th><th>Status</th><th>Admin notes</th></tr></thead>
+          <tbody id="rp-c-body"><tr class="empty-row"><td colspan="6">Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -584,71 +584,50 @@
     </div>
   </div>
 
-  <!-- ===================== MAINTENANCE CARD (admin only) ===================== -->
-  <div class="card" id="maintenance-card">
-    <h2 class="section-title">Maintenance</h2>
-    <div class="mtabs">
-      <button class="tab-btn active" id="mtab-bills" data-mpanel="mpanel-bills">Bills</button>
-      <button class="tab-btn" id="mtab-complaints" data-mpanel="mpanel-complaints">Complaints</button>
-    </div>
+  <!-- ===================== COMPLAINTS CARD (admin only) ===================== -->
+  <div class="card" id="complaints-card">
+    <h2 class="section-title">Complaints</h2>
+    <p class="note-text">Community and flat complaints (parking, cleaning, lift, and so on). Residents can attach a photo when they raise one.</p>
 
-    <div class="panel active" id="mpanel-bills">
-      <div class="field-grid">
-        <div>
-          <label for="bill-resident">Resident</label>
-          <select id="bill-resident"></select>
-        </div>
-        <div>
-          <label for="bill-month">Billing month</label>
-          <input type="month" id="bill-month" />
+    <h3 class="section-title" style="font-size:0.95rem;">Raise a complaint on a resident's behalf</h3>
+    <div class="field-grid">
+      <div>
+        <label for="comp-resident-search">Resident</label>
+        <div class="picker">
+          <input type="text" id="comp-resident-search" placeholder="Search by name or flat number" autocomplete="off" />
+          <input type="hidden" id="comp-resident" />
+          <div class="picker-list hidden" id="comp-resident-list"></div>
         </div>
       </div>
-      <div class="field-grid">
-        <div>
-          <label for="bill-amount">Amount due (₹)</label>
-          <input type="number" id="bill-amount" min="0" step="0.01" placeholder="e.g. 2500" />
-        </div>
-        <div>
-          <label for="bill-due-date">Due date</label>
-          <input type="date" id="bill-due-date" />
-        </div>
+      <div>
+        <label for="comp-category">Category</label>
+        <select id="comp-category"></select>
       </div>
-      <button class="action" id="btn-create-bill">Create Bill</button>
-
-      <table>
-        <thead>
-          <tr><th>#</th><th>Resident</th><th>Month</th><th>Amount</th><th>Due</th><th>Status</th><th>Action</th></tr>
-        </thead>
-        <tbody id="bills-body">
-          <tr class="empty-row"><td colspan="7">No bills yet.</td></tr>
-        </tbody>
-      </table>
     </div>
+    <label for="comp-description">Description</label>
+    <textarea id="comp-description" rows="3" placeholder="Describe the issue"></textarea>
+    <button class="action" id="btn-create-complaint">Raise Complaint</button>
 
-    <div class="panel" id="mpanel-complaints">
-      <div class="field-grid">
-        <div>
-          <label for="comp-resident">Resident</label>
-          <select id="comp-resident"></select>
-        </div>
-        <div>
-          <label for="comp-category">Category (optional)</label>
-          <input type="text" id="comp-category" placeholder="e.g. Plumbing, Electrical" />
-        </div>
-      </div>
-      <label for="comp-description">Description</label>
-      <textarea id="comp-description" rows="3" placeholder="Describe the issue"></textarea>
-      <button class="action" id="btn-create-complaint">Raise Complaint</button>
-
-      <table>
-        <thead>
-          <tr><th>#</th><th>Resident</th><th>Category</th><th>Description</th><th>Status</th><th>Action</th></tr>
-        </thead>
-        <tbody id="complaints-body">
-          <tr class="empty-row"><td colspan="6">No complaints yet.</td></tr>
-        </tbody>
-      </table>
+    <h3 class="section-title" style="margin-top:26px;">All complaints</h3>
+    <div class="filter-row">
+      <input type="text" id="comp-search" placeholder="Search resident, flat, description..." />
+      <select id="comp-filter-status">
+        <option value="">All statuses</option>
+        <option value="OPEN">Open</option>
+        <option value="IN_PROGRESS">In progress</option>
+        <option value="RESOLVED">Resolved</option>
+      </select>
+      <select id="comp-filter-category"></select>
     </div>
+    <div class="note-text" id="comp-count" style="margin:10px 0 0;"></div>
+    <table>
+      <thead>
+        <tr><th>#</th><th>Resident</th><th>Category</th><th>Description</th><th>Photo</th><th>Status</th><th>Raised</th><th>Action</th></tr>
+      </thead>
+      <tbody id="complaints-body">
+        <tr class="empty-row"><td colspan="8">No complaints yet.</td></tr>
+      </tbody>
+    </table>
   </div>
 
   <!-- ===================== STAFF DIRECTORY CARD ===================== -->
@@ -706,6 +685,16 @@
 
     </div>
 
+    <div class="filter-row" style="grid-template-columns: 2fr 1fr;">
+      <input type="text" id="staff-search" placeholder="Search by name, role, ID-card code, employer, phone..." />
+      <select id="staff-filter-status">
+        <option value="">All statuses</option>
+        <option value="ACTIVE">Active</option>
+        <option value="BLOCKED">Blocked</option>
+        <option value="EXPIRED">Expired</option>
+      </select>
+    </div>
+    <div class="note-text" id="staff-count" style="margin:10px 0 0;"></div>
     <table>
       <thead>
         <tr><th>#</th><th>Name</th><th>Role</th><th>Employed by</th><th>Aadhaar</th><th>Credential</th><th>Status</th><th>Action</th></tr>
@@ -718,6 +707,13 @@
 
   </div><!-- /staff-view -->
 
+</div>
+
+<div id="img-modal" class="modal hidden">
+  <div class="modal-body">
+    <button class="action secondary" id="img-modal-close" style="margin-top:0;">Close</button>
+    <img id="img-modal-img" alt="Complaint photo" />
+  </div>
 </div>
 
 <script>
@@ -769,13 +765,17 @@
   // -------------------------------------------------------------
   // Fetch helpers
   // -------------------------------------------------------------
-  async function request(method, url, body) {
+  async function request(method, url, body, isForm) {
     const headers = {};
     if (token) headers["Authorization"] = "Bearer " + token;
     const opts = { method: method, headers: headers };
     if (body !== undefined) {
-      headers["Content-Type"] = "application/json";
-      opts.body = JSON.stringify(body);
+      if (isForm) {
+        opts.body = body; // FormData: the browser sets the multipart boundary itself
+      } else {
+        headers["Content-Type"] = "application/json";
+        opts.body = JSON.stringify(body);
+      }
     }
     try {
       const res = await fetch(url, opts);
@@ -794,6 +794,7 @@
   }
 
   function postJSON(url, body) { return request("POST", url, body); }
+  function postForm(url, formData) { return request("POST", url, formData, true); }
   function getJSON(url) { return request("GET", url); }
 
   // /auth/login expects a form-encoded body (OAuth2 password flow), not JSON.
@@ -861,11 +862,10 @@
     ["panel-vehicle", "panel-visitor", "panel-delivery", "panel-staff"]
   );
   wireTabs([$("vtab-verify"), $("vtab-register")], "data-vpanel", ["vpanel-verify", "vpanel-register"]);
-  wireTabs([$("mtab-bills"), $("mtab-complaints")], "data-mpanel", ["mpanel-bills", "mpanel-complaints"]);
   wireTabs(
-    [$("rtab-visitors"), $("rtab-deliveries"), $("rtab-complaints"), $("rtab-bills")],
+    [$("rtab-visitors"), $("rtab-deliveries"), $("rtab-complaints")],
     "data-rpanel",
-    ["rpanel-visitors", "rpanel-deliveries", "rpanel-complaints", "rpanel-bills"]
+    ["rpanel-visitors", "rpanel-deliveries", "rpanel-complaints"]
   );
 
   // =============================================================
@@ -947,7 +947,7 @@
     residentsById = {};
     residents.forEach(function (r) { residentsById[r.id] = r; });
 
-    ["del-host", "bill-resident", "comp-resident"].forEach(function (id) {
+    ["del-host"].forEach(function (id) {
       const sel = $(id);
       if (!sel) return;
       sel.innerHTML = "";
@@ -1215,154 +1215,161 @@
 
   $("btn-refresh-deliveries").addEventListener("click", loadPendingDeliveries);
 
-  // ---- Maintenance: Bills (admin only)
-  $("btn-create-bill").addEventListener("click", async function () {
-    const residentSelect = $("bill-resident");
-    const residentId = residentSelect.value ? parseInt(residentSelect.value, 10) : null;
-    const month = $("bill-month").value; // "YYYY-MM"
-    const amount = parseFloat($("bill-amount").value);
-    const dueDateRaw = $("bill-due-date").value;
-
-    if (!residentId || !month || isNaN(amount) || !dueDateRaw) {
-      alert("Please fill in resident, billing month, amount, and due date.");
-      return;
+  // ---- Complaint photos need the auth header, so they are fetched with it
+  // and shown from a temporary blob URL (a plain <img src> can't send it).
+  async function openComplaintPhoto(complaintId) {
+    try {
+      const res = await fetch("/complaints/" + complaintId + "/image", { headers: { "Authorization": "Bearer " + token } });
+      if (!res.ok) { alert("Could not load the photo."); return; }
+      const blob = await res.blob();
+      const img = $("img-modal-img");
+      if (img.getAttribute("src")) URL.revokeObjectURL(img.getAttribute("src"));
+      img.src = URL.createObjectURL(blob);
+      $("img-modal").classList.remove("hidden");
+    } catch (e) {
+      alert("Could not load the photo.");
     }
+  }
 
-    const payload = {
-      resident_id: residentId,
-      billing_month: month,
-      amount_due: amount,
-      due_date: new Date(dueDateRaw).toISOString(),
-    };
+  function closePhotoModal() {
+    const img = $("img-modal-img");
+    if (img.getAttribute("src")) URL.revokeObjectURL(img.getAttribute("src"));
+    img.removeAttribute("src");
+    $("img-modal").classList.add("hidden");
+  }
+  $("img-modal-close").addEventListener("click", closePhotoModal);
+  $("img-modal").addEventListener("click", function (ev) { if (ev.target === $("img-modal")) closePhotoModal(); });
+  document.addEventListener("keydown", function (ev) { if (ev.key === "Escape") closePhotoModal(); });
 
-    const result = await postJSON("/maintenance/bills", payload);
-    if (!result.ok) {
-      alert("Could not create bill: " + result.error);
-      return;
-    }
-    $("bill-amount").value = "";
-    await loadBills();
-  });
+  // ---- Complaint categories come from the server (single source of truth)
+  let complaintCategories = [];
 
-  async function loadBills() {
-    const body = $("bills-body");
-    const result = await getJSON("/maintenance/bills");
-    if (!result.ok) {
-      body.innerHTML = emptyRow(7, "Could not load bills: " + result.error);
-      return;
-    }
-    const bills = result.data;
-    if (bills.length === 0) {
-      body.innerHTML = emptyRow(7, "No bills yet.");
-      return;
-    }
-    body.innerHTML = bills.map(function (b) {
-      const payBtn = b.status === "PAID"
-        ? "—"
-        : '<button class="approve" data-pay-id="' + Number(b.id) + '">Mark Paid</button>';
-      return "<tr>" +
-        "<td>" + Number(b.id) + "</td>" +
-        "<td>" + esc(residentLabel(b.resident_id)) + "</td>" +
-        "<td>" + esc(b.billing_month) + "</td>" +
-        '<td class="mono">₹' + Number(b.amount_due).toFixed(2) + "</td>" +
-        "<td>" + esc(fmtTime(b.due_date).split(",")[0]) + "</td>" +
-        "<td>" + badge(b.status) + "</td>" +
-        "<td>" + payBtn + "</td>" +
-      "</tr>";
-    }).join("");
+  async function loadComplaintCategories() {
+    if (complaintCategories.length) return;
+    const r = await getJSON("/complaints/categories");
+    if (r.ok) complaintCategories = r.data;
+  }
 
-    body.querySelectorAll("button[data-pay-id]").forEach(function (btn) {
-      btn.addEventListener("click", async function () {
-        const id = btn.getAttribute("data-pay-id");
-        const result = await postJSON("/maintenance/bills/" + id + "/pay", { payment_reference: null });
-        if (!result.ok) {
-          alert("Could not mark bill paid: " + result.error);
-          return;
-        }
-        await loadBills();
-      });
+  function fillCategorySelect(selectId, firstLabel) {
+    const sel = $(selectId);
+    sel.innerHTML = "";
+    const first = document.createElement("option");
+    first.value = "";
+    first.textContent = firstLabel;
+    sel.appendChild(first);
+    complaintCategories.forEach(function (c) {
+      const opt = document.createElement("option");
+      opt.value = c;
+      opt.textContent = c;
+      sel.appendChild(opt);
     });
   }
 
-  // ---- Maintenance: Complaints (admin only)
+  // ---- Complaints (admin)
+  const complaintResidentPicker = makeResidentPicker("comp-resident");
+  let complaintsCache = [];
+
   $("btn-create-complaint").addEventListener("click", async function () {
-    const residentSelect = $("comp-resident");
-    const residentId = residentSelect.value ? parseInt(residentSelect.value, 10) : null;
-    const category = $("comp-category").value.trim();
+    const residentId = $("comp-resident").value ? parseInt($("comp-resident").value, 10) : null;
+    const category = $("comp-category").value;
     const description = $("comp-description").value.trim();
 
-    if (!residentId || !description) {
-      alert("Please fill in resident and description.");
+    if (!residentId || !category || !description) {
+      alert("Please choose a resident, pick a category, and describe the complaint.");
       return;
     }
 
-    const payload = { resident_id: residentId, category: category || null, description: description };
-    const result = await postJSON("/complaints", payload);
+    const result = await postJSON("/complaints", { resident_id: residentId, category: category, description: description });
     if (!result.ok) {
       alert("Could not raise complaint: " + result.error);
       return;
     }
     $("comp-description").value = "";
+    $("comp-category").value = "";
+    complaintResidentPicker.reset();
     await loadComplaints();
   });
 
-  async function loadComplaints() {
+  function renderComplaints() {
     const body = $("complaints-body");
-    const result = await getJSON("/complaints");
-    if (!result.ok) {
-      body.innerHTML = emptyRow(6, "Could not load complaints: " + result.error);
+    const status = $("comp-filter-status").value;
+    const category = $("comp-filter-category").value;
+    const q = $("comp-search").value.trim().toLowerCase();
+
+    const rows = complaintsCache.filter(function (c) {
+      if (status && c.status !== status) return false;
+      if (category && c.category !== category) return false;
+      if (q) {
+        const hay = [residentLabel(c.resident_id), c.category || "", c.description, c.resolution_notes || ""].join(" ").toLowerCase();
+        if (hay.indexOf(q) === -1) return false;
+      }
+      return true;
+    });
+
+    $("comp-count").textContent = "Showing " + rows.length + " of " + complaintsCache.length;
+    if (rows.length === 0) {
+      body.innerHTML = emptyRow(8, complaintsCache.length ? "No complaints match these filters." : "No complaints yet.");
       return;
     }
-    const complaints = result.data;
-    if (complaints.length === 0) {
-      body.innerHTML = emptyRow(6, "No complaints yet.");
-      return;
-    }
-    body.innerHTML = complaints.map(function (c) {
+
+    body.innerHTML = rows.map(function (c) {
       const id = Number(c.id);
-      let actions = "";
+      let actions = "—";
       if (c.status === "OPEN") {
         actions = '<button data-start-id="' + id + '">Start</button> <button data-resolve-id="' + id + '">Resolve</button>';
       } else if (c.status === "IN_PROGRESS") {
         actions = '<button data-resolve-id="' + id + '">Resolve</button>';
-      } else {
-        actions = "—";
       }
+      const photo = c.has_image ? '<button data-photo-id="' + id + '">View</button>' : "—";
+      const notes = c.resolution_notes
+        ? '<div class="note-text" style="margin:4px 0 0;">Resolution: ' + esc(c.resolution_notes) + "</div>"
+        : "";
       return "<tr>" +
         "<td>" + id + "</td>" +
         "<td>" + esc(residentLabel(c.resident_id)) + "</td>" +
         "<td>" + esc(c.category || "—") + "</td>" +
-        "<td>" + esc(c.description) + "</td>" +
+        "<td>" + esc(c.description) + notes + "</td>" +
+        '<td class="row-actions">' + photo + "</td>" +
         "<td>" + badge(c.status) + "</td>" +
+        "<td>" + esc(fmtTime(c.raised_at)) + "</td>" +
         '<td class="row-actions">' + actions + "</td>" +
       "</tr>";
     }).join("");
 
+    body.querySelectorAll("button[data-photo-id]").forEach(function (btn) {
+      btn.addEventListener("click", function () { openComplaintPhoto(btn.getAttribute("data-photo-id")); });
+    });
     body.querySelectorAll("button[data-start-id]").forEach(function (btn) {
       btn.addEventListener("click", async function () {
-        const id = btn.getAttribute("data-start-id");
-        const result = await postJSON("/complaints/" + id + "/status", { status: "IN_PROGRESS", resolution_notes: null });
-        if (!result.ok) {
-          alert("Could not update complaint: " + result.error);
-          return;
-        }
+        const result = await postJSON("/complaints/" + btn.getAttribute("data-start-id") + "/status", { status: "IN_PROGRESS", resolution_notes: null });
+        if (!result.ok) { alert("Could not update complaint: " + result.error); return; }
         await loadComplaints();
       });
     });
-
     body.querySelectorAll("button[data-resolve-id]").forEach(function (btn) {
       btn.addEventListener("click", async function () {
-        const id = btn.getAttribute("data-resolve-id");
         const notes = window.prompt("Resolution notes (optional):", "");
-        const result = await postJSON("/complaints/" + id + "/status", { status: "RESOLVED", resolution_notes: notes || null });
-        if (!result.ok) {
-          alert("Could not resolve complaint: " + result.error);
-          return;
-        }
+        if (notes === null) return; // cancelled
+        const result = await postJSON("/complaints/" + btn.getAttribute("data-resolve-id") + "/status", { status: "RESOLVED", resolution_notes: notes || null });
+        if (!result.ok) { alert("Could not resolve complaint: " + result.error); return; }
         await loadComplaints();
       });
     });
   }
+
+  async function loadComplaints() {
+    const result = await getJSON("/complaints");
+    if (!result.ok) {
+      $("complaints-body").innerHTML = emptyRow(8, "Could not load complaints: " + result.error);
+      return;
+    }
+    complaintsCache = result.data;
+    renderComplaints();
+  }
+
+  $("comp-search").addEventListener("input", renderComplaints);
+  $("comp-filter-status").addEventListener("change", renderComplaints);
+  $("comp-filter-category").addEventListener("change", renderComplaints);
 
   // ---- General Staff directory (admin: full control; guard: read-only)
   $("btn-register-staff").addEventListener("click", async function () {
@@ -1415,19 +1422,25 @@
     await loadStaffDirectory();
   });
 
-  async function loadStaffDirectory() {
+  let staffCache = [];
+
+  function renderStaffDirectory() {
     const body = $("staff-body");
-    const result = await getJSON("/staff");
-    if (!result.ok) {
-      body.innerHTML = emptyRow(8, "Could not load staff: " + result.error);
-      return;
-    }
-    const staffList = result.data;
-    if (staffList.length === 0) {
-      body.innerHTML = emptyRow(8, "No staff registered yet.");
-      return;
-    }
-    body.innerHTML = staffList.map(function (s) {
+    const q = $("staff-search").value.trim().toLowerCase();
+    const statusFilter = $("staff-filter-status").value;
+
+    const rows = staffCache.filter(function (s) {
+      if (statusFilter && s.status !== statusFilter) return false;
+      if (!q) return true;
+      const employer = s.employed_by_resident_id ? residentLabel(s.employed_by_resident_id) : "society";
+      return [s.name, s.role, employer, s.credential_value, s.aadhaar_last4, s.phone].join(" ").toLowerCase().indexOf(q) !== -1;
+    });
+
+    $("staff-count").textContent = "Showing " + rows.length + " of " + staffCache.length;
+    if (staffCache.length === 0) { body.innerHTML = emptyRow(8, "No staff registered yet."); return; }
+    if (rows.length === 0) { body.innerHTML = emptyRow(8, "No staff match your search."); return; }
+
+    body.innerHTML = rows.map(function (s) {
       const id = Number(s.id);
       const employer = s.employed_by_resident_id ? residentLabel(s.employed_by_resident_id) : "— Society —";
       let action = "—";
@@ -1450,35 +1463,39 @@
 
     body.querySelectorAll("button[data-block-id]").forEach(function (btn) {
       btn.addEventListener("click", async function () {
-        const id = btn.getAttribute("data-block-id");
-        const result = await postJSON("/staff/" + id + "/status", { status: "BLOCKED" });
-        if (!result.ok) {
-          alert("Could not block staff member: " + result.error);
-          return;
-        }
+        const result = await postJSON("/staff/" + btn.getAttribute("data-block-id") + "/status", { status: "BLOCKED" });
+        if (!result.ok) { alert("Could not block staff member: " + result.error); return; }
         await loadStaffDirectory();
       });
     });
-
     body.querySelectorAll("button[data-unblock-id]").forEach(function (btn) {
       btn.addEventListener("click", async function () {
-        const id = btn.getAttribute("data-unblock-id");
-        const result = await postJSON("/staff/" + id + "/status", { status: "ACTIVE" });
-        if (!result.ok) {
-          alert("Could not unblock staff member: " + result.error);
-          return;
-        }
+        const result = await postJSON("/staff/" + btn.getAttribute("data-unblock-id") + "/status", { status: "ACTIVE" });
+        if (!result.ok) { alert("Could not unblock staff member: " + result.error); return; }
         await loadStaffDirectory();
       });
     });
   }
 
+  async function loadStaffDirectory() {
+    const result = await getJSON("/staff");
+    if (!result.ok) {
+      $("staff-body").innerHTML = emptyRow(8, "Could not load staff: " + result.error);
+      return;
+    }
+    staffCache = result.data;
+    renderStaffDirectory(); // keeps whatever the search box / filter currently say
+  }
+
+  $("staff-search").addEventListener("input", renderStaffDirectory);
+  $("staff-filter-status").addEventListener("change", renderStaffDirectory);
+
   async function startStaffConsole() {
     isAdmin = currentUser.role === "ADMIN";
     $("header-sub").textContent = isAdmin ? "Gate Access Terminal — admin console" : "Gate Access Terminal — guard console";
-    // Guards run the gate only: no maintenance/billing, and the staff
+    // Guards run the gate only: no complaints management, and the staff
     // directory is read-only for them (no registration, no block/unblock).
-    $("maintenance-card").classList.toggle("hidden", !isAdmin);
+    $("complaints-card").classList.toggle("hidden", !isAdmin);
     $("staffreg-form").classList.toggle("hidden", !isAdmin);
     $("staff-view").classList.remove("hidden");
 
@@ -1486,7 +1503,9 @@
     await loadPendingDeliveries();
     await loadStaffDirectory();
     if (isAdmin) {
-      await loadBills();
+      await loadComplaintCategories();
+      fillCategorySelect("comp-category", "Select a category...");
+      fillCategorySelect("comp-filter-category", "All categories");
       await loadComplaints();
     }
   }
@@ -1612,75 +1631,86 @@
   async function loadMyComplaints() {
     const body = $("rp-c-body");
     const result = await getJSON("/complaints");
-    if (!result.ok) { body.innerHTML = emptyRow(5, "Could not load complaints: " + result.error); return; }
-    if (result.data.length === 0) { body.innerHTML = emptyRow(5, "No complaints raised yet."); return; }
+    if (!result.ok) { body.innerHTML = emptyRow(6, "Could not load complaints: " + result.error); return; }
+    if (result.data.length === 0) { body.innerHTML = emptyRow(6, "No complaints raised yet."); return; }
     body.innerHTML = result.data.map(function (c) {
+      const id = Number(c.id);
       return "<tr>" +
-        "<td>" + Number(c.id) + "</td>" +
+        "<td>" + id + "</td>" +
         "<td>" + esc(c.category || "—") + "</td>" +
         "<td>" + esc(c.description) + "</td>" +
+        '<td class="row-actions">' + (c.has_image ? '<button data-photo-id="' + id + '">View</button>' : "—") + "</td>" +
         "<td>" + badge(c.status) + "</td>" +
         "<td>" + esc(c.resolution_notes || "—") + "</td>" +
       "</tr>";
     }).join("");
+    body.querySelectorAll("button[data-photo-id]").forEach(function (btn) {
+      btn.addEventListener("click", function () { openComplaintPhoto(btn.getAttribute("data-photo-id")); });
+    });
   }
+
+  const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+  const photoInput = $("rp-c-photo");
+  const photoPreview = $("rp-c-preview");
+
+  function clearPhotoPreview() {
+    if (photoPreview.getAttribute("src")) URL.revokeObjectURL(photoPreview.getAttribute("src"));
+    photoPreview.removeAttribute("src");
+    photoPreview.classList.add("hidden");
+  }
+
+  photoInput.addEventListener("change", function () {
+    clearPhotoPreview();
+    const file = photoInput.files && photoInput.files[0];
+    if (!file) return;
+    if (file.size > MAX_PHOTO_BYTES) {
+      alert("That image is larger than 5 MB. Please choose a smaller one.");
+      photoInput.value = "";
+      return;
+    }
+    photoPreview.src = URL.createObjectURL(file);
+    photoPreview.classList.remove("hidden");
+  });
 
   $("rp-c-submit").addEventListener("click", async function () {
     const box = $("rp-c-result");
     box.classList.remove("hidden");
+    const category = $("rp-c-category").value;
     const description = $("rp-c-description").value.trim();
+    if (!category) { box.textContent = "Please select a category."; return; }
     if (!description) { box.textContent = "Please describe the issue."; return; }
-    const payload = {
-      resident_id: currentUser.resident_id,
-      category: $("rp-c-category").value.trim() || null,
-      description: description,
-    };
-    const result = await postJSON("/complaints", payload);
+
+    const result = await postJSON("/complaints", { resident_id: currentUser.resident_id, category: category, description: description });
     if (!result.ok) { box.innerHTML = "Could not raise complaint: " + esc(result.error); return; }
-    box.textContent = "Complaint raised. The admin will pick it up.";
+
+    let message = "Complaint raised. The admin will pick it up.";
+    const file = photoInput.files && photoInput.files[0];
+    if (file) {
+      const form = new FormData();
+      form.append("file", file);
+      const upload = await postForm("/complaints/" + Number(result.data.id) + "/image", form);
+      if (!upload.ok) message = "Complaint raised, but the photo could not be uploaded: " + upload.error;
+    }
+    box.textContent = message;
+
     $("rp-c-description").value = "";
     $("rp-c-category").value = "";
+    photoInput.value = "";
+    clearPhotoPreview();
     await loadMyComplaints();
   });
-
-  async function loadMyBills() {
-    const body = $("rp-b-body");
-    const result = await getJSON("/maintenance/bills");
-    if (!result.ok) { body.innerHTML = emptyRow(5, "Could not load bills: " + result.error); return; }
-    if (result.data.length === 0) { body.innerHTML = emptyRow(5, "No bills yet."); return; }
-    body.innerHTML = result.data.map(function (b) {
-      const action = b.status === "PAID" ? "—" : '<button class="approve" data-pay-id="' + Number(b.id) + '">Mark as paid</button>';
-      return "<tr>" +
-        "<td>" + esc(b.billing_month) + "</td>" +
-        '<td class="mono">₹' + Number(b.amount_due).toFixed(2) + "</td>" +
-        "<td>" + esc(fmtTime(b.due_date).split(",")[0]) + "</td>" +
-        "<td>" + badge(b.status) + "</td>" +
-        '<td class="row-actions">' + action + "</td>" +
-      "</tr>";
-    }).join("");
-
-    body.querySelectorAll("button[data-pay-id]").forEach(function (btn) {
-      btn.addEventListener("click", async function () {
-        const ref = window.prompt("Payment reference (optional, e.g. UPI transaction ID):", "");
-        if (ref === null) return; // cancelled
-        const id = btn.getAttribute("data-pay-id");
-        const result = await postJSON("/maintenance/bills/" + id + "/pay", { payment_reference: ref.trim() || null });
-        if (!result.ok) { alert("Could not mark bill paid: " + result.error); return; }
-        await loadMyBills();
-      });
-    });
-  }
 
   $("rtab-visitors").addEventListener("click", loadMyVisitors);
   $("rtab-deliveries").addEventListener("click", loadMyDeliveries);
   $("rtab-complaints").addEventListener("click", loadMyComplaints);
-  $("rtab-bills").addEventListener("click", loadMyBills);
 
   async function startResidentPortal() {
     $("header-sub").textContent = "Resident portal";
     $("rp-welcome").textContent = "Welcome, " + currentUser.name + (currentUser.apartment_no ? " — Apartment " + currentUser.apartment_no : "");
     $("resident-view").classList.remove("hidden");
-    await Promise.all([loadMyVisitors(), loadMyDeliveries(), loadMyComplaints(), loadMyBills()]);
+    await loadComplaintCategories();
+    fillCategorySelect("rp-c-category", "Select a category...");
+    await Promise.all([loadMyVisitors(), loadMyDeliveries(), loadMyComplaints()]);
   }
 
   // =============================================================

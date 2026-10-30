@@ -4,10 +4,11 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from .database import Base, engine
+from .database import Base, check_schema, engine
 from .routers import auth, deliveries, maintenance, rfid, staff, visitors
 
 Base.metadata.create_all(bind=engine)
+check_schema()
 
 app = FastAPI(
     title="ManaDwar - Access Control API",

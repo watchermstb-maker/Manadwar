@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from .models import (
     AccessResult,
@@ -189,10 +189,26 @@ class MaintenanceBillOut(BaseModel):
     created_at: datetime
 
 
+COMPLAINT_CATEGORIES = [
+    "Parking", "Cleaning", "Plumbing", "Electrical", "Lift",
+    "Security", "Noise", "Water Supply", "Garbage", "Other",
+]
+
+
 class ComplaintCreate(BaseModel):
     resident_id: int
     category: Optional[str] = None
     description: str
+
+    @field_validator("category")
+    @classmethod
+    def _known_category(cls, value):
+        if value is None or value == "":
+            return None
+        for allowed in COMPLAINT_CATEGORIES:
+            if value.strip().lower() == allowed.lower():
+                return allowed  # normalise capitalisation
+        raise ValueError("category must be one of: " + ", ".join(COMPLAINT_CATEGORIES))
 
 
 class ComplaintStatusUpdate(BaseModel):
@@ -211,6 +227,7 @@ class ComplaintOut(BaseModel):
     raised_at: datetime
     resolved_at: Optional[datetime] = None
     resolution_notes: Optional[str] = None
+    has_image: bool = False
 
 
 # ---------------------------------------------------------------------------
