@@ -16,6 +16,7 @@ from .models import (
     EntryMethod,
     StaffRole,
     StaffStatus,
+    UserRole,
     VehicleType,
     VisitType,
 )
@@ -258,3 +259,38 @@ class VerifyStaffResponse(BaseModel):
     staff_name: Optional[str] = None
     role: Optional[StaffRole] = None
     employer_name: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Authentication
+# ---------------------------------------------------------------------------
+
+class UserRegister(BaseModel):
+    """Self-service registration -- always creates a RESIDENT account.
+
+    GUARD and ADMIN accounts are not self-service in this pilot; they're
+    created via the seed script / directly by whoever administers the
+    deployment, to keep gate-operation access deliberate.
+    """
+    name: str
+    email: str
+    password: str
+    resident_id: int
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    email: str
+    role: UserRole
+    resident_id: Optional[int] = None
+    apartment_no: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str

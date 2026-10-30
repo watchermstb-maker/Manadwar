@@ -3,6 +3,9 @@ uvicorn[standard]
 sqlalchemy
 pydantic
 python-dotenv
+bcrypt
+python-jose[cryptography]
+python-multipart
 
 # Uncomment to use Postgres instead of SQLite (see .env.example):
 # psycopg2-binary

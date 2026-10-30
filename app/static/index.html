@@ -233,18 +233,179 @@
     .field-grid { grid-template-columns: 1fr; }
     body { padding: 14px; }
   }
+  .userbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+  .userbar .who { font-size: 0.85rem; color: var(--muted); margin-right: 10px; }
+  .userbar .who strong { color: var(--text); }
+  .role-pill {
+    display: inline-block; padding: 2px 8px; border-radius: 4px; margin-left: 6px;
+    font-size: 0.7rem; font-weight: 700; background: var(--info-dim); color: var(--info);
+  }
+  .login-card { max-width: 420px; margin: 40px auto; }
+  .error-text { color: var(--denied); font-size: 0.85rem; margin-top: 12px; min-height: 1.2em; }
+  .note-text { color: var(--muted); font-size: 0.8rem; margin: 0 0 12px; line-height: 1.5; }
+  .badge.used { background: var(--info-dim); color: var(--info); }
 </style>
 </head>
 <body>
 <div class="wrap">
 
   <header>
-    <h1>ManaDwar</h1>
-    <p>Gate Access Terminal — demo console</p>
+    <div class="userbar">
+      <div>
+        <h1>ManaDwar</h1>
+        <p id="header-sub">Smart community access</p>
+      </div>
+      <div id="user-info" class="hidden">
+        <span class="who" id="who"></span>
+        <button class="action secondary" id="btn-logout" style="margin-top:0;">Sign out</button>
+      </div>
+    </div>
   </header>
 
+  <!-- ===================== LOGIN ===================== -->
+  <div id="login-view" class="hidden">
+    <div class="card login-card">
+      <h2 class="section-title">Sign in</h2>
+      <form id="login-form">
+        <label for="login-email">Email</label>
+        <input type="email" id="login-email" autocomplete="username" />
+        <label for="login-password">Password</label>
+        <input type="password" id="login-password" autocomplete="current-password" />
+        <button class="action" type="submit" id="btn-login">Sign in</button>
+        <div class="error-text" id="login-error"></div>
+      </form>
+      <p class="note-text">Demo accounts are listed in the README. Change them before any real use.</p>
+    </div>
+  </div>
+
+  <!-- ===================== RESIDENT PORTAL ===================== -->
+  <div id="resident-view" class="hidden">
+    <div class="card">
+      <h2 class="section-title" id="rp-welcome"></h2>
+      <div class="tabs">
+        <button class="tab-btn active" id="rtab-visitors" data-rpanel="rpanel-visitors">Visitors</button>
+        <button class="tab-btn" id="rtab-deliveries" data-rpanel="rpanel-deliveries">Deliveries</button>
+        <button class="tab-btn" id="rtab-complaints" data-rpanel="rpanel-complaints">Complaints</button>
+        <button class="tab-btn" id="rtab-bills" data-rpanel="rpanel-bills">Bills</button>
+      </div>
+
+      <!-- Visitors -->
+      <div class="panel active" id="rpanel-visitors">
+        <p class="note-text">Register a visitor to get a one-time OTP. Share it with them; the guard checks it at the gate.</p>
+        <div class="field-grid">
+          <div>
+            <label for="rp-v-name">Visitor name</label>
+            <input type="text" id="rp-v-name" placeholder="Full name" />
+          </div>
+          <div>
+            <label for="rp-v-phone">Phone</label>
+            <input type="text" id="rp-v-phone" placeholder="10-digit number" />
+          </div>
+        </div>
+        <div class="field-grid">
+          <div>
+            <label for="rp-v-type">Visit type</label>
+            <select id="rp-v-type">
+              <option value="SHORT_TERM">Short-term (walk-in, 24h)</option>
+              <option value="LONG_TERM">Long-term</option>
+            </select>
+          </div>
+          <div>
+            <label for="rp-v-purpose">Purpose (optional)</label>
+            <input type="text" id="rp-v-purpose" placeholder="e.g. Family visit" />
+          </div>
+        </div>
+        <div id="rp-v-longterm" class="hidden">
+          <div class="field-grid">
+            <div>
+              <label for="rp-v-until">Valid until</label>
+              <input type="datetime-local" id="rp-v-until" />
+            </div>
+            <div>
+              <label for="rp-v-vtype">Vehicle type (if any)</label>
+              <select id="rp-v-vtype">
+                <option value="">— No vehicle —</option>
+                <option value="CAR">CAR</option>
+                <option value="BIKE">BIKE</option>
+              </select>
+            </div>
+          </div>
+          <label for="rp-v-vnum">Vehicle number (optional)</label>
+          <input type="text" id="rp-v-vnum" placeholder="e.g. KA-01-XY-9999" />
+        </div>
+        <button class="action" id="rp-v-submit">Register Visitor</button>
+        <div class="inline-result hidden" id="rp-v-result"></div>
+
+        <h3 class="section-title" style="margin-top:24px;">My Visitors</h3>
+        <table>
+          <thead><tr><th>#</th><th>Name</th><th>Type</th><th>OTP</th><th>OTP expires</th><th>Status</th></tr></thead>
+          <tbody id="rp-v-body"><tr class="empty-row"><td colspan="6">Loading...</td></tr></tbody>
+        </table>
+      </div>
+
+      <!-- Deliveries -->
+      <div class="panel" id="rpanel-deliveries">
+        <p class="note-text">Expecting a courier? Auto-approve lets them in straight away; otherwise the guard approves or denies at the gate.</p>
+        <label>Approval</label>
+        <div class="segmented">
+          <button class="active" id="rp-d-auto">Auto-approve</button>
+          <button id="rp-d-manual">Guard decides</button>
+        </div>
+        <div class="field-grid">
+          <div>
+            <label for="rp-d-courier">Courier name</label>
+            <input type="text" id="rp-d-courier" placeholder="e.g. Ramesh" />
+          </div>
+          <div>
+            <label for="rp-d-platform">Platform (optional)</label>
+            <input type="text" id="rp-d-platform" placeholder="e.g. Amazon, Swiggy" />
+          </div>
+        </div>
+        <label for="rp-d-purpose">Purpose (optional)</label>
+        <input type="text" id="rp-d-purpose" placeholder="e.g. Package delivery" />
+        <button class="action" id="rp-d-submit">Request Delivery</button>
+        <div class="inline-result hidden" id="rp-d-result"></div>
+
+        <h3 class="section-title" style="margin-top:24px;">My Deliveries</h3>
+        <button class="action secondary" id="rp-d-refresh" style="margin-top:0;margin-bottom:10px;">Refresh</button>
+        <table>
+          <thead><tr><th>#</th><th>Courier</th><th>Mode</th><th>Requested</th><th>Status</th></tr></thead>
+          <tbody id="rp-d-body"><tr class="empty-row"><td colspan="5">Loading...</td></tr></tbody>
+        </table>
+      </div>
+
+      <!-- Complaints -->
+      <div class="panel" id="rpanel-complaints">
+        <label for="rp-c-category">Category (optional)</label>
+        <input type="text" id="rp-c-category" placeholder="e.g. Plumbing, Electrical" />
+        <label for="rp-c-description">Description</label>
+        <textarea id="rp-c-description" rows="3" placeholder="Describe the issue"></textarea>
+        <button class="action" id="rp-c-submit">Raise Complaint</button>
+        <div class="inline-result hidden" id="rp-c-result"></div>
+
+        <h3 class="section-title" style="margin-top:24px;">My Complaints</h3>
+        <table>
+          <thead><tr><th>#</th><th>Category</th><th>Description</th><th>Status</th><th>Admin notes</th></tr></thead>
+          <tbody id="rp-c-body"><tr class="empty-row"><td colspan="5">Loading...</td></tr></tbody>
+        </table>
+      </div>
+
+      <!-- Bills -->
+      <div class="panel" id="rpanel-bills">
+        <p class="note-text">No real payment gateway is connected in this pilot. "Mark as paid" records that you have paid (with an optional reference such as a UPI transaction ID) so the admin can see it.</p>
+        <table>
+          <thead><tr><th>Month</th><th>Amount</th><th>Due</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody id="rp-b-body"><tr class="empty-row"><td colspan="5">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== GUARD / ADMIN CONSOLE ===================== -->
+  <div id="staff-view" class="hidden">
+
   <!-- ===================== TERMINAL CARD ===================== -->
-  <div class="card">
+  <div class="card" id="terminal-card">
     <div class="tabs">
       <button class="tab-btn active" id="tab-vehicle" data-panel="panel-vehicle">Vehicle</button>
       <button class="tab-btn" id="tab-visitor" data-panel="panel-visitor">Visitor</button>
@@ -409,8 +570,8 @@
     </div>
   </div>
 
-  <!-- ===================== MAINTENANCE CARD ===================== -->
-  <div class="card">
+  <!-- ===================== MAINTENANCE CARD (admin only) ===================== -->
+  <div class="card" id="maintenance-card">
     <h2 class="section-title">Maintenance</h2>
     <div class="mtabs">
       <button class="tab-btn active" id="mtab-bills" data-mpanel="mpanel-bills">Bills</button>
@@ -477,13 +638,14 @@
   </div>
 
   <!-- ===================== STAFF DIRECTORY CARD ===================== -->
-  <div class="card">
+  <div class="card" id="staffdir-card">
     <h2 class="section-title">General Staff</h2>
     <p style="color:var(--muted);font-size:0.85rem;margin-top:-8px;margin-bottom:14px;">
       House help, drivers, security, and other recurring staff. Aadhaar is hashed on
       registration -- only the last 4 digits are ever stored or shown.
     </p>
 
+    <div id="staffreg-form">
     <div class="field-grid">
       <div>
         <label for="staffreg-name">Name</label>
@@ -528,6 +690,8 @@
 
     <div class="inline-result hidden" id="staffreg-result"></div>
 
+    </div>
+
     <table>
       <thead>
         <tr><th>#</th><th>Name</th><th>Role</th><th>Employed by</th><th>Aadhaar</th><th>Credential</th><th>Status</th><th>Action</th></tr>
@@ -538,25 +702,76 @@
     </table>
   </div>
 
+  </div><!-- /staff-view -->
+
 </div>
 
 <script>
 (function () {
   "use strict";
 
+  const $ = function (id) { return document.getElementById(id); };
+
+  // -------------------------------------------------------------
+  // Session: JWT kept in localStorage (falls back to memory-only if the
+  // browser blocks storage). Every API call sends it as a Bearer token.
+  // -------------------------------------------------------------
+  const TOKEN_KEY = "manadwar_token";
+  const MSG_KEY = "manadwar_msg";
+
+  function storeGet(key) { try { return window.localStorage.getItem(key); } catch (e) { return null; } }
+  function storeSet(key, val) { try { window.localStorage.setItem(key, val); } catch (e) { /* memory-only */ } }
+  function storeDel(key) { try { window.localStorage.removeItem(key); } catch (e) { /* ignore */ } }
+
+  let token = storeGet(TOKEN_KEY);
+  let currentUser = null;
+  let isAdmin = false;
+
+  function signOut(message) {
+    storeDel(TOKEN_KEY);
+    if (message) { try { window.sessionStorage.setItem(MSG_KEY, message); } catch (e) { /* ignore */ } }
+    window.location.reload();
+  }
+
+  // -------------------------------------------------------------
+  // Safety: residents type text that guards/admins later see rendered
+  // in their own browsers, so everything interpolated into innerHTML
+  // goes through esc().
+  // -------------------------------------------------------------
+  const ESC_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+  function esc(value) {
+    return String(value === null || value === undefined ? "" : value).replace(/[&<>"']/g, function (c) { return ESC_MAP[c]; });
+  }
+
+  function errorText(data, status) {
+    const detail = data && data.detail;
+    if (typeof detail === "string") return detail;
+    if (Array.isArray(detail) && detail.length) {
+      return detail.map(function (d) { return d.msg || JSON.stringify(d); }).join("; ");
+    }
+    return "Request failed (" + status + ")";
+  }
+
   // -------------------------------------------------------------
   // Fetch helpers
   // -------------------------------------------------------------
-  async function postJSON(url, body) {
+  async function request(method, url, body) {
+    const headers = {};
+    if (token) headers["Authorization"] = "Bearer " + token;
+    const opts = { method: method, headers: headers };
+    if (body !== undefined) {
+      headers["Content-Type"] = "application/json";
+      opts.body = JSON.stringify(body);
+    }
     try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      const res = await fetch(url, opts);
       const data = await res.json().catch(function () { return {}; });
+      if (res.status === 401 && token) {
+        signOut("Your session expired. Please sign in again.");
+        return { ok: false, status: 401, data: data, error: "Session expired." };
+      }
       if (!res.ok) {
-        return { ok: false, status: res.status, data: data, error: data.detail || ("Request failed (" + res.status + ")") };
+        return { ok: false, status: res.status, data: data, error: errorText(data, res.status) };
       }
       return { ok: true, status: res.status, data: data };
     } catch (err) {
@@ -564,16 +779,25 @@
     }
   }
 
-  async function getJSON(url) {
+  function postJSON(url, body) { return request("POST", url, body); }
+  function getJSON(url) { return request("GET", url); }
+
+  // /auth/login expects a form-encoded body (OAuth2 password flow), not JSON.
+  async function loginRequest(email, password) {
+    const form = new URLSearchParams();
+    form.set("username", email);
+    form.set("password", password);
     try {
-      const res = await fetch(url);
+      const res = await fetch("/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: form.toString(),
+      });
       const data = await res.json().catch(function () { return {}; });
-      if (!res.ok) {
-        return { ok: false, status: res.status, data: data, error: data.detail || ("Request failed (" + res.status + ")") };
-      }
-      return { ok: true, status: res.status, data: data };
+      if (!res.ok) return { ok: false, error: errorText(data, res.status) };
+      return { ok: true, token: data.access_token };
     } catch (err) {
-      return { ok: false, status: 0, data: null, error: "Network error: could not reach the server." };
+      return { ok: false, error: "Network error: could not reach the server." };
     }
   }
 
@@ -590,9 +814,17 @@
     return d ? d.toLocaleString() : "—";
   }
 
+  function badge(text) {
+    const cls = String(text).toLowerCase().replace(/[^a-z_]/g, "");
+    return '<span class="badge ' + cls + '">' + esc(text) + "</span>";
+  }
+
+  function emptyRow(cols, text) {
+    return '<tr class="empty-row"><td colspan="' + cols + '">' + esc(text) + "</td></tr>";
+  }
+
   // -------------------------------------------------------------
-  // Generic tab switcher: wires a group of tab buttons (with a data-*
-  // attribute naming the panel id to show) to a set of panel elements.
+  // Generic tab switcher
   // -------------------------------------------------------------
   function wireTabs(tabButtons, dataAttr, panelIds) {
     tabButtons.forEach(function (btn) {
@@ -601,7 +833,7 @@
         btn.classList.add("active");
         const target = btn.getAttribute(dataAttr);
         panelIds.forEach(function (pid) {
-          const el = document.getElementById(pid);
+          const el = $(pid);
           if (!el) return;
           el.classList.toggle("active", pid === target);
         });
@@ -610,29 +842,25 @@
   }
 
   wireTabs(
-    [document.getElementById("tab-vehicle"), document.getElementById("tab-visitor"), document.getElementById("tab-delivery"), document.getElementById("tab-staff")],
+    [$("tab-vehicle"), $("tab-visitor"), $("tab-delivery"), $("tab-staff")],
     "data-panel",
     ["panel-vehicle", "panel-visitor", "panel-delivery", "panel-staff"]
   );
-
+  wireTabs([$("vtab-verify"), $("vtab-register")], "data-vpanel", ["vpanel-verify", "vpanel-register"]);
+  wireTabs([$("mtab-bills"), $("mtab-complaints")], "data-mpanel", ["mpanel-bills", "mpanel-complaints"]);
   wireTabs(
-    [document.getElementById("vtab-verify"), document.getElementById("vtab-register")],
-    "data-vpanel",
-    ["vpanel-verify", "vpanel-register"]
+    [$("rtab-visitors"), $("rtab-deliveries"), $("rtab-complaints"), $("rtab-bills")],
+    "data-rpanel",
+    ["rpanel-visitors", "rpanel-deliveries", "rpanel-complaints", "rpanel-bills"]
   );
 
-  wireTabs(
-    [document.getElementById("mtab-bills"), document.getElementById("mtab-complaints")],
-    "data-mpanel",
-    ["mpanel-bills", "mpanel-complaints"]
-  );
+  // =============================================================
+  // GUARD / ADMIN CONSOLE
+  // =============================================================
 
-  // -------------------------------------------------------------
-  // Status screen
-  // -------------------------------------------------------------
-  const statusScreen = document.getElementById("status-screen");
-  const statusMessage = document.getElementById("status-message");
-  const statusDetail = document.getElementById("status-detail");
+  const statusScreen = $("status-screen");
+  const statusMessage = $("status-message");
+  const statusDetail = $("status-detail");
 
   function setStatus(state, message, detail) {
     statusScreen.classList.remove("state-idle", "state-granted", "state-denied");
@@ -641,9 +869,7 @@
     statusDetail.textContent = detail || "";
   }
 
-  // -------------------------------------------------------------
   // Residents: loaded once, used to populate every resident dropdown.
-  // -------------------------------------------------------------
   let residentsById = {};
 
   async function loadResidents() {
@@ -653,13 +879,8 @@
     residentsById = {};
     residents.forEach(function (r) { residentsById[r.id] = r; });
 
-    const selects = [
-      document.getElementById("reg-host"),
-      document.getElementById("del-host"),
-      document.getElementById("bill-resident"),
-      document.getElementById("comp-resident"),
-    ];
-    selects.forEach(function (sel) {
+    ["reg-host", "del-host", "bill-resident", "comp-resident"].forEach(function (id) {
+      const sel = $(id);
       if (!sel) return;
       sel.innerHTML = "";
       residents.forEach(function (r) {
@@ -673,7 +894,7 @@
     // Staff employer dropdown is optional (security guards are often
     // society-employed, not tied to one resident), so it gets a blank
     // "none" option the others don't.
-    const employerSel = document.getElementById("staffreg-employer");
+    const employerSel = $("staffreg-employer");
     if (employerSel) {
       employerSel.innerHTML = "";
       const noneOpt = document.createElement("option");
@@ -694,17 +915,10 @@
     return r ? (r.name + " (" + r.apartment_no + ")") : ("#" + id);
   }
 
-  function badge(text) {
-    const cls = String(text).toLowerCase();
-    return '<span class="badge ' + cls + '">' + text + "</span>";
-  }
-
-  // -------------------------------------------------------------
-  // Vehicle tab
-  // -------------------------------------------------------------
-  document.getElementById("btn-verify-rfid").addEventListener("click", async function () {
-    const value = document.getElementById("rfid-input").value.trim();
-    const direction = document.getElementById("rfid-direction").value;
+  // ---- Vehicle tab
+  $("btn-verify-rfid").addEventListener("click", async function () {
+    const value = $("rfid-input").value.trim();
+    const direction = $("rfid-direction").value;
     if (!value) {
       setStatus("denied", "NO CREDENTIAL", "Enter an RFID/FASTag code first.");
       return;
@@ -723,12 +937,10 @@
     }
   });
 
-  // -------------------------------------------------------------
-  // Staff tab: verify staff ID-card credential
-  // -------------------------------------------------------------
-  document.getElementById("btn-verify-staff").addEventListener("click", async function () {
-    const value = document.getElementById("staff-credential-input").value.trim();
-    const direction = document.getElementById("staff-direction").value;
+  // ---- Staff tab: verify staff ID-card credential
+  $("btn-verify-staff").addEventListener("click", async function () {
+    const value = $("staff-credential-input").value.trim();
+    const direction = $("staff-direction").value;
     if (!value) {
       setStatus("denied", "NO CREDENTIAL", "Enter a staff ID-card code first.");
       return;
@@ -747,12 +959,10 @@
     }
   });
 
-  // -------------------------------------------------------------
-  // Visitor tab: verify OTP
-  // -------------------------------------------------------------
-  document.getElementById("btn-verify-otp").addEventListener("click", async function () {
-    const code = document.getElementById("otp-input").value.trim();
-    const direction = document.getElementById("otp-direction").value;
+  // ---- Visitor tab: verify OTP
+  $("btn-verify-otp").addEventListener("click", async function () {
+    const code = $("otp-input").value.trim();
+    const direction = $("otp-direction").value;
     if (!code) {
       setStatus("denied", "NO OTP", "Enter the OTP code first.");
       return;
@@ -771,11 +981,9 @@
     }
   });
 
-  // -------------------------------------------------------------
-  // Visitor tab: register visitor
-  // -------------------------------------------------------------
-  const visitTypeSelect = document.getElementById("reg-visit-type");
-  const longTermFields = document.getElementById("reg-longterm-fields");
+  // ---- Visitor tab: register visitor (guard/admin, on behalf of any host)
+  const visitTypeSelect = $("reg-visit-type");
+  const longTermFields = $("reg-longterm-fields");
 
   function syncLongTermFields() {
     longTermFields.classList.toggle("hidden", visitTypeSelect.value !== "LONG_TERM");
@@ -783,41 +991,35 @@
   visitTypeSelect.addEventListener("change", syncLongTermFields);
   syncLongTermFields();
 
-  document.getElementById("btn-register-visitor").addEventListener("click", async function () {
-    const resultBox = document.getElementById("reg-result");
+  $("btn-register-visitor").addEventListener("click", async function () {
+    const resultBox = $("reg-result");
     resultBox.classList.add("hidden");
 
-    const name = document.getElementById("reg-name").value.trim();
-    const phone = document.getElementById("reg-phone").value.trim();
-    const hostSelect = document.getElementById("reg-host");
+    const name = $("reg-name").value.trim();
+    const phone = $("reg-phone").value.trim();
+    const hostSelect = $("reg-host");
     const hostId = hostSelect.value ? parseInt(hostSelect.value, 10) : null;
     const visitType = visitTypeSelect.value;
-    const purpose = document.getElementById("reg-purpose").value.trim();
+    const purpose = $("reg-purpose").value.trim();
 
     if (!name || !phone || !hostId) {
       resultBox.classList.remove("hidden");
-      resultBox.innerHTML = "Please fill in visitor name, phone, and host resident.";
+      resultBox.textContent = "Please fill in visitor name, phone, and host resident.";
       return;
     }
 
-    const payload = {
-      name: name,
-      phone: phone,
-      host_resident_id: hostId,
-      visit_type: visitType,
-      purpose: purpose || null,
-    };
+    const payload = { name: name, phone: phone, host_resident_id: hostId, visit_type: visitType, purpose: purpose || null };
 
     if (visitType === "LONG_TERM") {
-      const validUntilRaw = document.getElementById("reg-valid-until").value;
+      const validUntilRaw = $("reg-valid-until").value;
       if (!validUntilRaw) {
         resultBox.classList.remove("hidden");
-        resultBox.innerHTML = "Long-term visits require a 'valid until' date/time.";
+        resultBox.textContent = "Long-term visits require a 'valid until' date/time.";
         return;
       }
       payload.valid_until = new Date(validUntilRaw).toISOString();
-      const vehicleNumber = document.getElementById("reg-vehicle-number").value.trim();
-      const vehicleType = document.getElementById("reg-vehicle-type").value;
+      const vehicleNumber = $("reg-vehicle-number").value.trim();
+      const vehicleType = $("reg-vehicle-type").value;
       if (vehicleNumber) {
         payload.vehicle_number = vehicleNumber;
         payload.vehicle_type = vehicleType || "CAR";
@@ -827,25 +1029,23 @@
     const result = await postJSON("/visitors", payload);
     resultBox.classList.remove("hidden");
     if (!result.ok) {
-      resultBox.innerHTML = "Registration failed: " + result.error;
+      resultBox.innerHTML = "Registration failed: " + esc(result.error);
       return;
     }
 
     const visitor = result.data;
     resultBox.innerHTML =
-      "Visitor <strong>" + visitor.name + "</strong> registered.<br/>" +
-      "Share this OTP with them for gate entry (valid until " + fmtTime(visitor.otp_expires_at) + "):<br/>" +
-      '<span class="otp-code">' + visitor.otp_code + "</span>";
+      "Visitor <strong>" + esc(visitor.name) + "</strong> registered.<br/>" +
+      "Share this OTP with them for gate entry (valid until " + esc(fmtTime(visitor.otp_expires_at)) + "):<br/>" +
+      '<span class="otp-code">' + esc(visitor.otp_code) + "</span>";
 
     setStatus("idle", "VISITOR REGISTERED", visitor.name + " — OTP issued.");
   });
 
-  // -------------------------------------------------------------
-  // Delivery tab
-  // -------------------------------------------------------------
+  // ---- Delivery tab
   let deliveryMode = "AUTO";
-  const delModeAuto = document.getElementById("del-mode-auto");
-  const delModeManual = document.getElementById("del-mode-manual");
+  const delModeAuto = $("del-mode-auto");
+  const delModeManual = $("del-mode-manual");
 
   delModeAuto.addEventListener("click", function () {
     deliveryMode = "AUTO";
@@ -858,20 +1058,20 @@
     delModeAuto.classList.remove("active");
   });
 
-  document.getElementById("btn-submit-delivery").addEventListener("click", async function () {
-    const resultBox = document.getElementById("del-result");
+  $("btn-submit-delivery").addEventListener("click", async function () {
+    const resultBox = $("del-result");
     resultBox.classList.add("hidden");
 
-    const courierName = document.getElementById("del-courier-name").value.trim();
-    const courierPhone = document.getElementById("del-courier-phone").value.trim();
-    const platform = document.getElementById("del-platform").value.trim();
-    const hostSelect = document.getElementById("del-host");
+    const courierName = $("del-courier-name").value.trim();
+    const courierPhone = $("del-courier-phone").value.trim();
+    const platform = $("del-platform").value.trim();
+    const hostSelect = $("del-host");
     const hostId = hostSelect.value ? parseInt(hostSelect.value, 10) : null;
-    const purpose = document.getElementById("del-purpose").value.trim();
+    const purpose = $("del-purpose").value.trim();
 
     if (!courierName || !hostId) {
       resultBox.classList.remove("hidden");
-      resultBox.innerHTML = "Please fill in courier name and host resident.";
+      resultBox.textContent = "Please fill in courier name and host resident.";
       return;
     }
 
@@ -887,16 +1087,16 @@
     const result = await postJSON("/deliveries", payload);
     resultBox.classList.remove("hidden");
     if (!result.ok) {
-      resultBox.innerHTML = "Submission failed: " + result.error;
+      resultBox.innerHTML = "Submission failed: " + esc(result.error);
       return;
     }
 
     const delivery = result.data;
     if (delivery.status === "APPROVED") {
-      resultBox.innerHTML = "Delivery for <strong>" + delivery.courier_name + "</strong> auto-approved. Access granted.";
+      resultBox.innerHTML = "Delivery for <strong>" + esc(delivery.courier_name) + "</strong> auto-approved. Access granted.";
       setStatus("granted", "DELIVERY APPROVED", delivery.courier_name + " — auto-approved.");
     } else {
-      resultBox.innerHTML = "Delivery for <strong>" + delivery.courier_name + "</strong> submitted and awaiting manual approval below.";
+      resultBox.innerHTML = "Delivery for <strong>" + esc(delivery.courier_name) + "</strong> submitted and awaiting manual approval below.";
       setStatus("idle", "AWAITING APPROVAL", delivery.courier_name + " — pending manual decision.");
     }
 
@@ -904,27 +1104,28 @@
   });
 
   async function loadPendingDeliveries() {
-    const body = document.getElementById("pending-deliveries-body");
+    const body = $("pending-deliveries-body");
     const result = await getJSON("/deliveries");
     if (!result.ok) {
-      body.innerHTML = '<tr class="empty-row"><td colspan="6">Could not load deliveries: ' + result.error + "</td></tr>";
+      body.innerHTML = emptyRow(6, "Could not load deliveries: " + result.error);
       return;
     }
     const pending = result.data.filter(function (d) { return d.approval_mode === "MANUAL" && d.status === "PENDING"; });
     if (pending.length === 0) {
-      body.innerHTML = '<tr class="empty-row"><td colspan="6">No pending deliveries right now.</td></tr>';
+      body.innerHTML = emptyRow(6, "No pending deliveries right now.");
       return;
     }
     body.innerHTML = pending.map(function (d) {
+      const id = Number(d.id);
       return "<tr>" +
-        "<td>" + d.id + "</td>" +
-        "<td>" + d.courier_name + (d.platform ? " (" + d.platform + ")" : "") + "</td>" +
-        "<td>" + residentLabel(d.host_resident_id) + "</td>" +
-        "<td>" + fmtTime(d.requested_at) + "</td>" +
+        "<td>" + id + "</td>" +
+        "<td>" + esc(d.courier_name) + (d.platform ? " (" + esc(d.platform) + ")" : "") + "</td>" +
+        "<td>" + esc(residentLabel(d.host_resident_id)) + "</td>" +
+        "<td>" + esc(fmtTime(d.requested_at)) + "</td>" +
         "<td>" + badge(d.status) + "</td>" +
         '<td class="row-actions">' +
-          '<button class="approve" data-id="' + d.id + '" data-approve="true">Approve</button>' +
-          '<button class="deny" data-id="' + d.id + '" data-approve="false">Deny</button>' +
+          '<button class="approve" data-id="' + id + '" data-approve="true">Approve</button>' +
+          '<button class="deny" data-id="' + id + '" data-approve="false">Deny</button>' +
         "</td>" +
       "</tr>";
     }).join("");
@@ -944,17 +1145,15 @@
     });
   }
 
-  document.getElementById("btn-refresh-deliveries").addEventListener("click", loadPendingDeliveries);
+  $("btn-refresh-deliveries").addEventListener("click", loadPendingDeliveries);
 
-  // -------------------------------------------------------------
-  // Maintenance: Bills
-  // -------------------------------------------------------------
-  document.getElementById("btn-create-bill").addEventListener("click", async function () {
-    const residentSelect = document.getElementById("bill-resident");
+  // ---- Maintenance: Bills (admin only)
+  $("btn-create-bill").addEventListener("click", async function () {
+    const residentSelect = $("bill-resident");
     const residentId = residentSelect.value ? parseInt(residentSelect.value, 10) : null;
-    const month = document.getElementById("bill-month").value; // "YYYY-MM"
-    const amount = parseFloat(document.getElementById("bill-amount").value);
-    const dueDateRaw = document.getElementById("bill-due-date").value;
+    const month = $("bill-month").value; // "YYYY-MM"
+    const amount = parseFloat($("bill-amount").value);
+    const dueDateRaw = $("bill-due-date").value;
 
     if (!residentId || !month || isNaN(amount) || !dueDateRaw) {
       alert("Please fill in resident, billing month, amount, and due date.");
@@ -973,32 +1172,32 @@
       alert("Could not create bill: " + result.error);
       return;
     }
-    document.getElementById("bill-amount").value = "";
+    $("bill-amount").value = "";
     await loadBills();
   });
 
   async function loadBills() {
-    const body = document.getElementById("bills-body");
+    const body = $("bills-body");
     const result = await getJSON("/maintenance/bills");
     if (!result.ok) {
-      body.innerHTML = '<tr class="empty-row"><td colspan="7">Could not load bills: ' + result.error + "</td></tr>";
+      body.innerHTML = emptyRow(7, "Could not load bills: " + result.error);
       return;
     }
     const bills = result.data;
     if (bills.length === 0) {
-      body.innerHTML = '<tr class="empty-row"><td colspan="7">No bills yet.</td></tr>';
+      body.innerHTML = emptyRow(7, "No bills yet.");
       return;
     }
     body.innerHTML = bills.map(function (b) {
       const payBtn = b.status === "PAID"
         ? "—"
-        : '<button class="approve" data-pay-id="' + b.id + '">Mark Paid</button>';
+        : '<button class="approve" data-pay-id="' + Number(b.id) + '">Mark Paid</button>';
       return "<tr>" +
-        "<td>" + b.id + "</td>" +
-        "<td>" + residentLabel(b.resident_id) + "</td>" +
-        "<td>" + b.billing_month + "</td>" +
-        '<td class="mono">₹' + b.amount_due.toFixed(2) + "</td>" +
-        "<td>" + fmtTime(b.due_date).split(",")[0] + "</td>" +
+        "<td>" + Number(b.id) + "</td>" +
+        "<td>" + esc(residentLabel(b.resident_id)) + "</td>" +
+        "<td>" + esc(b.billing_month) + "</td>" +
+        '<td class="mono">₹' + Number(b.amount_due).toFixed(2) + "</td>" +
+        "<td>" + esc(fmtTime(b.due_date).split(",")[0]) + "</td>" +
         "<td>" + badge(b.status) + "</td>" +
         "<td>" + payBtn + "</td>" +
       "</tr>";
@@ -1017,14 +1216,12 @@
     });
   }
 
-  // -------------------------------------------------------------
-  // Maintenance: Complaints
-  // -------------------------------------------------------------
-  document.getElementById("btn-create-complaint").addEventListener("click", async function () {
-    const residentSelect = document.getElementById("comp-resident");
+  // ---- Maintenance: Complaints (admin only)
+  $("btn-create-complaint").addEventListener("click", async function () {
+    const residentSelect = $("comp-resident");
     const residentId = residentSelect.value ? parseInt(residentSelect.value, 10) : null;
-    const category = document.getElementById("comp-category").value.trim();
-    const description = document.getElementById("comp-description").value.trim();
+    const category = $("comp-category").value.trim();
+    const description = $("comp-description").value.trim();
 
     if (!residentId || !description) {
       alert("Please fill in resident and description.");
@@ -1037,36 +1234,37 @@
       alert("Could not raise complaint: " + result.error);
       return;
     }
-    document.getElementById("comp-description").value = "";
+    $("comp-description").value = "";
     await loadComplaints();
   });
 
   async function loadComplaints() {
-    const body = document.getElementById("complaints-body");
+    const body = $("complaints-body");
     const result = await getJSON("/complaints");
     if (!result.ok) {
-      body.innerHTML = '<tr class="empty-row"><td colspan="6">Could not load complaints: ' + result.error + "</td></tr>";
+      body.innerHTML = emptyRow(6, "Could not load complaints: " + result.error);
       return;
     }
     const complaints = result.data;
     if (complaints.length === 0) {
-      body.innerHTML = '<tr class="empty-row"><td colspan="6">No complaints yet.</td></tr>';
+      body.innerHTML = emptyRow(6, "No complaints yet.");
       return;
     }
     body.innerHTML = complaints.map(function (c) {
+      const id = Number(c.id);
       let actions = "";
       if (c.status === "OPEN") {
-        actions = '<button data-start-id="' + c.id + '">Start</button> <button data-resolve-id="' + c.id + '">Resolve</button>';
+        actions = '<button data-start-id="' + id + '">Start</button> <button data-resolve-id="' + id + '">Resolve</button>';
       } else if (c.status === "IN_PROGRESS") {
-        actions = '<button data-resolve-id="' + c.id + '">Resolve</button>';
+        actions = '<button data-resolve-id="' + id + '">Resolve</button>';
       } else {
         actions = "—";
       }
       return "<tr>" +
-        "<td>" + c.id + "</td>" +
-        "<td>" + residentLabel(c.resident_id) + "</td>" +
-        "<td>" + (c.category || "—") + "</td>" +
-        "<td>" + c.description + "</td>" +
+        "<td>" + id + "</td>" +
+        "<td>" + esc(residentLabel(c.resident_id)) + "</td>" +
+        "<td>" + esc(c.category || "—") + "</td>" +
+        "<td>" + esc(c.description) + "</td>" +
         "<td>" + badge(c.status) + "</td>" +
         '<td class="row-actions">' + actions + "</td>" +
       "</tr>";
@@ -1098,24 +1296,22 @@
     });
   }
 
-  // -------------------------------------------------------------
-  // General Staff
-  // -------------------------------------------------------------
-  document.getElementById("btn-register-staff").addEventListener("click", async function () {
-    const resultBox = document.getElementById("staffreg-result");
+  // ---- General Staff directory (admin: full control; guard: read-only)
+  $("btn-register-staff").addEventListener("click", async function () {
+    const resultBox = $("staffreg-result");
     resultBox.classList.add("hidden");
 
-    const name = document.getElementById("staffreg-name").value.trim();
-    const phone = document.getElementById("staffreg-phone").value.trim();
-    const role = document.getElementById("staffreg-role").value;
-    const employerSelect = document.getElementById("staffreg-employer");
+    const name = $("staffreg-name").value.trim();
+    const phone = $("staffreg-phone").value.trim();
+    const role = $("staffreg-role").value;
+    const employerSelect = $("staffreg-employer");
     const employerId = employerSelect.value ? parseInt(employerSelect.value, 10) : null;
-    const aadhaarRaw = document.getElementById("staffreg-aadhaar").value.trim();
-    const expiresRaw = document.getElementById("staffreg-expires").value;
+    const aadhaarRaw = $("staffreg-aadhaar").value.trim();
+    const expiresRaw = $("staffreg-expires").value;
 
     if (!name || !phone || !aadhaarRaw) {
       resultBox.classList.remove("hidden");
-      resultBox.innerHTML = "Please fill in name, phone, and Aadhaar number.";
+      resultBox.textContent = "Please fill in name, phone, and Aadhaar number.";
       return;
     }
 
@@ -1133,48 +1329,52 @@
     const result = await postJSON("/staff", payload);
     resultBox.classList.remove("hidden");
     if (!result.ok) {
-      resultBox.innerHTML = "Registration failed: " + result.error;
+      resultBox.innerHTML = "Registration failed: " + esc(result.error);
       return;
     }
 
     const member = result.data;
     resultBox.innerHTML =
-      "Staff member <strong>" + member.name + "</strong> registered.<br/>" +
-      "Their gate ID-card code (Aadhaar stored only as last 4 digits: " + member.aadhaar_last4 + "):<br/>" +
-      '<span class="otp-code">' + member.credential_value + "</span>";
+      "Staff member <strong>" + esc(member.name) + "</strong> registered.<br/>" +
+      "Their gate ID-card code (Aadhaar stored only as last 4 digits: " + esc(member.aadhaar_last4) + "):<br/>" +
+      '<span class="otp-code">' + esc(member.credential_value) + "</span>";
 
-    document.getElementById("staffreg-name").value = "";
-    document.getElementById("staffreg-phone").value = "";
-    document.getElementById("staffreg-aadhaar").value = "";
-    document.getElementById("staffreg-expires").value = "";
+    $("staffreg-name").value = "";
+    $("staffreg-phone").value = "";
+    $("staffreg-aadhaar").value = "";
+    $("staffreg-expires").value = "";
 
     await loadStaffDirectory();
   });
 
   async function loadStaffDirectory() {
-    const body = document.getElementById("staff-body");
+    const body = $("staff-body");
     const result = await getJSON("/staff");
     if (!result.ok) {
-      body.innerHTML = '<tr class="empty-row"><td colspan="8">Could not load staff: ' + result.error + "</td></tr>";
+      body.innerHTML = emptyRow(8, "Could not load staff: " + result.error);
       return;
     }
     const staffList = result.data;
     if (staffList.length === 0) {
-      body.innerHTML = '<tr class="empty-row"><td colspan="8">No staff registered yet.</td></tr>';
+      body.innerHTML = emptyRow(8, "No staff registered yet.");
       return;
     }
     body.innerHTML = staffList.map(function (s) {
+      const id = Number(s.id);
       const employer = s.employed_by_resident_id ? residentLabel(s.employed_by_resident_id) : "— Society —";
-      const action = s.status === "BLOCKED"
-        ? '<button class="approve" data-unblock-id="' + s.id + '">Unblock</button>'
-        : '<button class="deny" data-block-id="' + s.id + '">Block</button>';
+      let action = "—";
+      if (isAdmin) {
+        action = s.status === "BLOCKED"
+          ? '<button class="approve" data-unblock-id="' + id + '">Unblock</button>'
+          : '<button class="deny" data-block-id="' + id + '">Block</button>';
+      }
       return "<tr>" +
-        "<td>" + s.id + "</td>" +
-        "<td>" + s.name + "</td>" +
-        "<td>" + s.role + "</td>" +
-        "<td>" + employer + "</td>" +
-        '<td class="mono">XXXX-XXXX-' + s.aadhaar_last4 + "</td>" +
-        '<td class="mono">' + s.credential_value + "</td>" +
+        "<td>" + id + "</td>" +
+        "<td>" + esc(s.name) + "</td>" +
+        "<td>" + esc(s.role) + "</td>" +
+        "<td>" + esc(employer) + "</td>" +
+        '<td class="mono">XXXX-XXXX-' + esc(s.aadhaar_last4) + "</td>" +
+        '<td class="mono">' + esc(s.credential_value) + "</td>" +
         "<td>" + badge(s.status) + "</td>" +
         '<td class="row-actions">' + action + "</td>" +
       "</tr>";
@@ -1205,18 +1405,283 @@
     });
   }
 
-  // -------------------------------------------------------------
-  // Initial load
-  // -------------------------------------------------------------
-  async function init() {
+  async function startStaffConsole() {
+    isAdmin = currentUser.role === "ADMIN";
+    $("header-sub").textContent = isAdmin ? "Gate Access Terminal — admin console" : "Gate Access Terminal — guard console";
+    // Guards run the gate only: no maintenance/billing, and the staff
+    // directory is read-only for them (no registration, no block/unblock).
+    $("maintenance-card").classList.toggle("hidden", !isAdmin);
+    $("staffreg-form").classList.toggle("hidden", !isAdmin);
+    $("staff-view").classList.remove("hidden");
+
     await loadResidents();
     await loadPendingDeliveries();
-    await loadBills();
-    await loadComplaints();
     await loadStaffDirectory();
+    if (isAdmin) {
+      await loadBills();
+      await loadComplaints();
+    }
   }
 
-  init();
+  // =============================================================
+  // RESIDENT PORTAL (everything is scoped to the logged-in resident)
+  // =============================================================
+
+  const rpLongTerm = $("rp-v-longterm");
+  function syncRpLongTerm() { rpLongTerm.classList.toggle("hidden", $("rp-v-type").value !== "LONG_TERM"); }
+  $("rp-v-type").addEventListener("change", syncRpLongTerm);
+  syncRpLongTerm();
+
+  function visitorStatus(v) {
+    if (v.otp_verified) return "USED";
+    const exp = parseUTC(v.otp_expires_at);
+    return exp && exp < new Date() ? "EXPIRED" : "ACTIVE";
+  }
+
+  async function loadMyVisitors() {
+    const body = $("rp-v-body");
+    const result = await getJSON("/visitors");
+    if (!result.ok) { body.innerHTML = emptyRow(6, "Could not load visitors: " + result.error); return; }
+    if (result.data.length === 0) { body.innerHTML = emptyRow(6, "No visitors registered yet."); return; }
+    body.innerHTML = result.data.map(function (v) {
+      return "<tr>" +
+        "<td>" + Number(v.id) + "</td>" +
+        "<td>" + esc(v.name) + "</td>" +
+        "<td>" + esc(v.visit_type) + "</td>" +
+        '<td class="mono">' + esc(v.otp_code) + "</td>" +
+        "<td>" + esc(fmtTime(v.otp_expires_at)) + "</td>" +
+        "<td>" + badge(visitorStatus(v)) + "</td>" +
+      "</tr>";
+    }).join("");
+  }
+
+  $("rp-v-submit").addEventListener("click", async function () {
+    const box = $("rp-v-result");
+    box.classList.remove("hidden");
+
+    const name = $("rp-v-name").value.trim();
+    const phone = $("rp-v-phone").value.trim();
+    const visitType = $("rp-v-type").value;
+    const purpose = $("rp-v-purpose").value.trim();
+    if (!name || !phone) { box.textContent = "Please fill in visitor name and phone."; return; }
+
+    const payload = { name: name, phone: phone, host_resident_id: currentUser.resident_id, visit_type: visitType, purpose: purpose || null };
+    if (visitType === "LONG_TERM") {
+      const untilRaw = $("rp-v-until").value;
+      if (!untilRaw) { box.textContent = "Long-term visits need a 'valid until' date/time."; return; }
+      payload.valid_until = new Date(untilRaw).toISOString();
+      const vnum = $("rp-v-vnum").value.trim();
+      if (vnum) { payload.vehicle_number = vnum; payload.vehicle_type = $("rp-v-vtype").value || "CAR"; }
+    }
+
+    const result = await postJSON("/visitors", payload);
+    if (!result.ok) { box.innerHTML = "Registration failed: " + esc(result.error); return; }
+    const v = result.data;
+    box.innerHTML =
+      "Visitor <strong>" + esc(v.name) + "</strong> registered.<br/>" +
+      "Share this OTP with them (valid until " + esc(fmtTime(v.otp_expires_at)) + "):<br/>" +
+      '<span class="otp-code">' + esc(v.otp_code) + "</span>";
+    $("rp-v-name").value = "";
+    $("rp-v-phone").value = "";
+    $("rp-v-purpose").value = "";
+    await loadMyVisitors();
+  });
+
+  let rpDeliveryMode = "AUTO";
+  $("rp-d-auto").addEventListener("click", function () {
+    rpDeliveryMode = "AUTO";
+    $("rp-d-auto").classList.add("active");
+    $("rp-d-manual").classList.remove("active");
+  });
+  $("rp-d-manual").addEventListener("click", function () {
+    rpDeliveryMode = "MANUAL";
+    $("rp-d-manual").classList.add("active");
+    $("rp-d-auto").classList.remove("active");
+  });
+
+  async function loadMyDeliveries() {
+    const body = $("rp-d-body");
+    const result = await getJSON("/deliveries");
+    if (!result.ok) { body.innerHTML = emptyRow(5, "Could not load deliveries: " + result.error); return; }
+    if (result.data.length === 0) { body.innerHTML = emptyRow(5, "No delivery requests yet."); return; }
+    body.innerHTML = result.data.map(function (d) {
+      return "<tr>" +
+        "<td>" + Number(d.id) + "</td>" +
+        "<td>" + esc(d.courier_name) + (d.platform ? " (" + esc(d.platform) + ")" : "") + "</td>" +
+        "<td>" + esc(d.approval_mode === "AUTO" ? "Auto" : "Guard decides") + "</td>" +
+        "<td>" + esc(fmtTime(d.requested_at)) + "</td>" +
+        "<td>" + badge(d.status) + "</td>" +
+      "</tr>";
+    }).join("");
+  }
+
+  $("rp-d-refresh").addEventListener("click", loadMyDeliveries);
+
+  $("rp-d-submit").addEventListener("click", async function () {
+    const box = $("rp-d-result");
+    box.classList.remove("hidden");
+    const courier = $("rp-d-courier").value.trim();
+    if (!courier) { box.textContent = "Please enter the courier name."; return; }
+    const payload = {
+      courier_name: courier,
+      platform: $("rp-d-platform").value.trim() || null,
+      host_resident_id: currentUser.resident_id,
+      purpose: $("rp-d-purpose").value.trim() || null,
+      approval_mode: rpDeliveryMode,
+    };
+    const result = await postJSON("/deliveries", payload);
+    if (!result.ok) { box.innerHTML = "Request failed: " + esc(result.error); return; }
+    const d = result.data;
+    box.innerHTML = d.status === "APPROVED"
+      ? "Delivery for <strong>" + esc(d.courier_name) + "</strong> auto-approved."
+      : "Delivery for <strong>" + esc(d.courier_name) + "</strong> is waiting for the guard's decision.";
+    $("rp-d-courier").value = "";
+    $("rp-d-platform").value = "";
+    $("rp-d-purpose").value = "";
+    await loadMyDeliveries();
+  });
+
+  async function loadMyComplaints() {
+    const body = $("rp-c-body");
+    const result = await getJSON("/complaints");
+    if (!result.ok) { body.innerHTML = emptyRow(5, "Could not load complaints: " + result.error); return; }
+    if (result.data.length === 0) { body.innerHTML = emptyRow(5, "No complaints raised yet."); return; }
+    body.innerHTML = result.data.map(function (c) {
+      return "<tr>" +
+        "<td>" + Number(c.id) + "</td>" +
+        "<td>" + esc(c.category || "—") + "</td>" +
+        "<td>" + esc(c.description) + "</td>" +
+        "<td>" + badge(c.status) + "</td>" +
+        "<td>" + esc(c.resolution_notes || "—") + "</td>" +
+      "</tr>";
+    }).join("");
+  }
+
+  $("rp-c-submit").addEventListener("click", async function () {
+    const box = $("rp-c-result");
+    box.classList.remove("hidden");
+    const description = $("rp-c-description").value.trim();
+    if (!description) { box.textContent = "Please describe the issue."; return; }
+    const payload = {
+      resident_id: currentUser.resident_id,
+      category: $("rp-c-category").value.trim() || null,
+      description: description,
+    };
+    const result = await postJSON("/complaints", payload);
+    if (!result.ok) { box.innerHTML = "Could not raise complaint: " + esc(result.error); return; }
+    box.textContent = "Complaint raised. The admin will pick it up.";
+    $("rp-c-description").value = "";
+    $("rp-c-category").value = "";
+    await loadMyComplaints();
+  });
+
+  async function loadMyBills() {
+    const body = $("rp-b-body");
+    const result = await getJSON("/maintenance/bills");
+    if (!result.ok) { body.innerHTML = emptyRow(5, "Could not load bills: " + result.error); return; }
+    if (result.data.length === 0) { body.innerHTML = emptyRow(5, "No bills yet."); return; }
+    body.innerHTML = result.data.map(function (b) {
+      const action = b.status === "PAID" ? "—" : '<button class="approve" data-pay-id="' + Number(b.id) + '">Mark as paid</button>';
+      return "<tr>" +
+        "<td>" + esc(b.billing_month) + "</td>" +
+        '<td class="mono">₹' + Number(b.amount_due).toFixed(2) + "</td>" +
+        "<td>" + esc(fmtTime(b.due_date).split(",")[0]) + "</td>" +
+        "<td>" + badge(b.status) + "</td>" +
+        '<td class="row-actions">' + action + "</td>" +
+      "</tr>";
+    }).join("");
+
+    body.querySelectorAll("button[data-pay-id]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        const ref = window.prompt("Payment reference (optional, e.g. UPI transaction ID):", "");
+        if (ref === null) return; // cancelled
+        const id = btn.getAttribute("data-pay-id");
+        const result = await postJSON("/maintenance/bills/" + id + "/pay", { payment_reference: ref.trim() || null });
+        if (!result.ok) { alert("Could not mark bill paid: " + result.error); return; }
+        await loadMyBills();
+      });
+    });
+  }
+
+  $("rtab-visitors").addEventListener("click", loadMyVisitors);
+  $("rtab-deliveries").addEventListener("click", loadMyDeliveries);
+  $("rtab-complaints").addEventListener("click", loadMyComplaints);
+  $("rtab-bills").addEventListener("click", loadMyBills);
+
+  async function startResidentPortal() {
+    $("header-sub").textContent = "Resident portal";
+    $("rp-welcome").textContent = "Welcome, " + currentUser.name + (currentUser.apartment_no ? " — Apartment " + currentUser.apartment_no : "");
+    $("resident-view").classList.remove("hidden");
+    await Promise.all([loadMyVisitors(), loadMyDeliveries(), loadMyComplaints(), loadMyBills()]);
+  }
+
+  // =============================================================
+  // LOGIN / BOOT
+  // =============================================================
+
+  function showLogin(message) {
+    $("login-view").classList.remove("hidden");
+    $("login-error").textContent = message || "";
+    $("login-email").focus();
+  }
+
+  $("login-form").addEventListener("submit", async function (ev) {
+    ev.preventDefault();
+    const email = $("login-email").value.trim();
+    const password = $("login-password").value;
+    const errBox = $("login-error");
+    errBox.textContent = "";
+    if (!email || !password) { errBox.textContent = "Enter your email and password."; return; }
+
+    const btn = $("btn-login");
+    btn.disabled = true;
+    const result = await loginRequest(email, password);
+    btn.disabled = false;
+    if (!result.ok) { errBox.textContent = result.error; return; }
+
+    token = result.token;
+    storeSet(TOKEN_KEY, token);
+    $("login-password").value = "";
+    $("login-view").classList.add("hidden");
+    await boot();
+  });
+
+  $("btn-logout").addEventListener("click", function () { signOut(); });
+
+  async function boot() {
+    if (!token) { showLogin(takeFlashMessage()); return; }
+
+    const me = await getJSON("/auth/me");
+    if (!me.ok) {
+      // A 401 already triggered signOut() (and a reload); anything else
+      // (e.g. server unreachable) falls back to the login screen.
+      if (me.status !== 401) showLogin(me.error);
+      return;
+    }
+    currentUser = me.data;
+
+    $("who").innerHTML = "<strong>" + esc(currentUser.name) + "</strong>" +
+      '<span class="role-pill">' + esc(currentUser.role) + "</span>";
+    $("user-info").classList.remove("hidden");
+
+    if (currentUser.role === "RESIDENT") {
+      await startResidentPortal();
+    } else if (currentUser.role === "GUARD" || currentUser.role === "ADMIN") {
+      await startStaffConsole();
+    } else {
+      signOut("Unknown account role.");
+    }
+  }
+
+  function takeFlashMessage() {
+    try {
+      const msg = window.sessionStorage.getItem(MSG_KEY);
+      window.sessionStorage.removeItem(MSG_KEY);
+      return msg || "";
+    } catch (e) { return ""; }
+  }
+
+  boot();
 })();
 </script>
 </body>

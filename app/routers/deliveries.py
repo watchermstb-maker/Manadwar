@@ -5,13 +5,26 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from .. import models, schemas, utils
+from ..auth import get_current_user, require_roles
 from ..database import get_db
 
 router = APIRouter(tags=["Deliveries"])
 
+_gate_staff = require_roles(models.UserRole.GUARD, models.UserRole.ADMIN)
+
 
 @router.post("/deliveries", response_model=schemas.DeliveryOut)
-def create_delivery(payload: schemas.DeliveryCreate, db: Session = Depends(get_db)):
+def create_delivery(
+    payload: schemas.DeliveryCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if current_user.role == models.UserRole.RESIDENT:
+        if current_user.resident_id != payload.host_resident_id:
+            raise HTTPException(status_code=403, detail="Residents can only request deliveries for themselves.")
+    elif current_user.role not in (models.UserRole.GUARD, models.UserRole.ADMIN):
+        raise HTTPException(status_code=403, detail="You don't have permission to do this.")
+
     host = db.query(models.Resident).filter(models.Resident.id == payload.host_resident_id).first()
     if host is None:
         raise HTTPException(status_code=404, detail="Host resident not found.")
@@ -48,7 +61,10 @@ def create_delivery(payload: schemas.DeliveryCreate, db: Session = Depends(get_d
 
 @router.post("/deliveries/{delivery_id}/decision", response_model=schemas.DeliveryOut)
 def decide_delivery(
-    delivery_id: int, payload: schemas.DeliveryDecision, db: Session = Depends(get_db)
+    delivery_id: int,
+    payload: schemas.DeliveryDecision,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(_gate_staff),
 ):
     delivery = db.query(models.Delivery).filter(models.Delivery.id == delivery_id).first()
     if delivery is None:
@@ -85,5 +101,13 @@ def decide_delivery(
 
 
 @router.get("/deliveries", response_model=List[schemas.DeliveryOut])
-def list_deliveries(db: Session = Depends(get_db)):
-    return db.query(models.Delivery).order_by(models.Delivery.requested_at.desc()).all()
+def list_deliveries(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    query = db.query(models.Delivery)
+    if current_user.role == models.UserRole.RESIDENT:
+        query = query.filter(models.Delivery.host_resident_id == current_user.resident_id)
+    elif current_user.role not in (models.UserRole.GUARD, models.UserRole.ADMIN):
+        raise HTTPException(status_code=403, detail="You don't have permission to do this.")
+    return query.order_by(models.Delivery.requested_at.desc()).all()

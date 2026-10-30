@@ -2,6 +2,7 @@
 
 Run with:  python -m app.seed
 """
+from .auth import hash_password
 from .database import Base, SessionLocal, engine
 from .models import (
     CredentialStatus,
@@ -10,6 +11,8 @@ from .models import (
     Staff,
     StaffRole,
     StaffStatus,
+    User,
+    UserRole,
     Vehicle,
     VehicleCredential,
     VehicleType,
@@ -78,7 +81,37 @@ def seed():
         db.add_all([s1, s2, s3])
         db.commit()
 
+        # Demo login accounts -- one per role, so the software pilot has
+        # something to log in with on day one. Change these passwords
+        # (or delete these accounts) before any real-world use.
+        u1 = User(
+            name="Society Admin", email="admin@manadwar.test",
+            password_hash=hash_password("admin123"), role=UserRole.ADMIN,
+        )
+        u2 = User(
+            name="Gate Guard", email="guard@manadwar.test",
+            password_hash=hash_password("guard123"), role=UserRole.GUARD,
+        )
+        u3 = User(
+            name="Arun Kumar", email="arun@manadwar.test",
+            password_hash=hash_password("resident123"), role=UserRole.RESIDENT,
+            resident_id=r1.id,
+        )
+        u4 = User(
+            name="Priya Menon", email="priya@manadwar.test",
+            password_hash=hash_password("resident123"), role=UserRole.RESIDENT,
+            resident_id=r2.id,
+        )
+        db.add_all([u1, u2, u3, u4])
+        db.commit()
+
         print("Seed complete.")
+        print()
+        print("Demo login accounts:")
+        print("  Admin:    admin@manadwar.test    / admin123")
+        print("  Guard:    guard@manadwar.test     / guard123")
+        print("  Resident: arun@manadwar.test      / resident123  (Arun Kumar, A-101)")
+        print("  Resident: priya@manadwar.test     / resident123  (Priya Menon, B-204)")
     finally:
         db.close()
 

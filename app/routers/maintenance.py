@@ -5,9 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
+from ..auth import get_current_user, require_roles
 from ..database import get_db
 
 router = APIRouter(tags=["Maintenance: Bills & Complaints"])
+
+_admin_only = require_roles(models.UserRole.ADMIN)
 
 
 def _validate_billing_month(value: str) -> None:
@@ -22,7 +25,11 @@ def _validate_billing_month(value: str) -> None:
 # ---------------------------------------------------------------------------
 
 @router.post("/maintenance/bills", response_model=schemas.MaintenanceBillOut)
-def create_bill(payload: schemas.MaintenanceBillCreate, db: Session = Depends(get_db)):
+def create_bill(
+    payload: schemas.MaintenanceBillCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(_admin_only),
+):
     resident = db.query(models.Resident).filter(models.Resident.id == payload.resident_id).first()
     if resident is None:
         raise HTTPException(status_code=404, detail="Resident not found.")
@@ -43,10 +50,21 @@ def create_bill(payload: schemas.MaintenanceBillCreate, db: Session = Depends(ge
 
 
 @router.post("/maintenance/bills/{bill_id}/pay", response_model=schemas.MaintenanceBillOut)
-def pay_bill(bill_id: int, payload: schemas.MaintenanceBillPay, db: Session = Depends(get_db)):
+def pay_bill(
+    bill_id: int,
+    payload: schemas.MaintenanceBillPay,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
     bill = db.query(models.MaintenanceBill).filter(models.MaintenanceBill.id == bill_id).first()
     if bill is None:
         raise HTTPException(status_code=404, detail="Bill not found.")
+
+    if current_user.role == models.UserRole.RESIDENT:
+        if bill.resident_id != current_user.resident_id:
+            raise HTTPException(status_code=403, detail="You can only pay your own bills.")
+    elif current_user.role != models.UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="You don't have permission to do this.")
 
     if bill.status == models.BillStatus.PAID:
         raise HTTPException(status_code=400, detail="This bill has already been paid.")
@@ -60,7 +78,16 @@ def pay_bill(bill_id: int, payload: schemas.MaintenanceBillPay, db: Session = De
 
 
 @router.get("/maintenance/bills", response_model=List[schemas.MaintenanceBillOut])
-def list_bills(resident_id: Optional[int] = None, db: Session = Depends(get_db)):
+def list_bills(
+    resident_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if current_user.role == models.UserRole.RESIDENT:
+        resident_id = current_user.resident_id
+    elif current_user.role != models.UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="You don't have permission to do this.")
+
     query = db.query(models.MaintenanceBill)
     if resident_id is not None:
         query = query.filter(models.MaintenanceBill.resident_id == resident_id)
@@ -85,7 +112,17 @@ def list_bills(resident_id: Optional[int] = None, db: Session = Depends(get_db))
 # ---------------------------------------------------------------------------
 
 @router.post("/complaints", response_model=schemas.ComplaintOut)
-def create_complaint(payload: schemas.ComplaintCreate, db: Session = Depends(get_db)):
+def create_complaint(
+    payload: schemas.ComplaintCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if current_user.role == models.UserRole.RESIDENT:
+        if current_user.resident_id != payload.resident_id:
+            raise HTTPException(status_code=403, detail="Residents can only raise complaints for themselves.")
+    elif current_user.role != models.UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="You don't have permission to do this.")
+
     resident = db.query(models.Resident).filter(models.Resident.id == payload.resident_id).first()
     if resident is None:
         raise HTTPException(status_code=404, detail="Resident not found.")
@@ -104,7 +141,10 @@ def create_complaint(payload: schemas.ComplaintCreate, db: Session = Depends(get
 
 @router.post("/complaints/{complaint_id}/status", response_model=schemas.ComplaintOut)
 def update_complaint_status(
-    complaint_id: int, payload: schemas.ComplaintStatusUpdate, db: Session = Depends(get_db)
+    complaint_id: int,
+    payload: schemas.ComplaintStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(_admin_only),
 ):
     complaint = db.query(models.Complaint).filter(models.Complaint.id == complaint_id).first()
     if complaint is None:
@@ -126,7 +166,13 @@ def list_complaints(
     resident_id: Optional[int] = None,
     status: Optional[models.ComplaintStatus] = None,
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ):
+    if current_user.role == models.UserRole.RESIDENT:
+        resident_id = current_user.resident_id
+    elif current_user.role != models.UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="You don't have permission to do this.")
+
     query = db.query(models.Complaint)
     if resident_id is not None:
         query = query.filter(models.Complaint.resident_id == resident_id)

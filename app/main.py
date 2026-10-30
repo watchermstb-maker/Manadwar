@@ -5,7 +5,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from .database import Base, engine
-from .routers import deliveries, maintenance, rfid, staff, visitors
+from .routers import auth, deliveries, maintenance, rfid, staff, visitors
 
 Base.metadata.create_all(bind=engine)
 
@@ -13,11 +13,13 @@ app = FastAPI(
     title="ManaDwar - Access Control API",
     description=(
         "RFID vehicle access control, OTP visitor entry, delivery approval, "
-        "maintenance/complaints, and general staff (house help/driver/"
-        "security) access for a smart-community gate system."
+        "maintenance/complaints, general staff (house help/driver/"
+        "security) access, and JWT-based authentication with ADMIN/GUARD/"
+        "RESIDENT roles, for a smart-community gate system."
     ),
-    version="5.0.0",
+    version="6.0.0",
 )
+app.include_router(auth.router)
 app.include_router(rfid.router)
 app.include_router(visitors.router)
 app.include_router(deliveries.router)

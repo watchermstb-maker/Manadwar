@@ -5,13 +5,20 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from .. import models, schemas, utils
+from ..auth import require_roles
 from ..database import get_db
 
 router = APIRouter(tags=["RFID / Vehicle Access"])
 
+_gate_staff = require_roles(models.UserRole.GUARD, models.UserRole.ADMIN)
+
 
 @router.post("/verify-rfid", response_model=schemas.VerifyRFIDResponse)
-def verify_rfid(payload: schemas.VerifyRFIDRequest, db: Session = Depends(get_db)):
+def verify_rfid(
+    payload: schemas.VerifyRFIDRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(_gate_staff),
+):
     credential = (
         db.query(models.VehicleCredential)
         .filter(models.VehicleCredential.credential_value == payload.credential_value)
@@ -103,7 +110,7 @@ def verify_rfid(payload: schemas.VerifyRFIDRequest, db: Session = Depends(get_db
 
 
 @router.get("/entry-logs", response_model=List[schemas.EntryLogOut])
-def list_entry_logs(db: Session = Depends(get_db)):
+def list_entry_logs(db: Session = Depends(get_db), current_user: models.User = Depends(_gate_staff)):
     return (
         db.query(models.EntryLog)
         .order_by(models.EntryLog.timestamp.desc())
@@ -112,15 +119,15 @@ def list_entry_logs(db: Session = Depends(get_db)):
 
 
 @router.get("/vehicles", response_model=List[schemas.VehicleOut])
-def list_vehicles(db: Session = Depends(get_db)):
+def list_vehicles(db: Session = Depends(get_db), current_user: models.User = Depends(_gate_staff)):
     return db.query(models.Vehicle).all()
 
 
 @router.get("/credentials", response_model=List[schemas.CredentialOut])
-def list_credentials(db: Session = Depends(get_db)):
+def list_credentials(db: Session = Depends(get_db), current_user: models.User = Depends(_gate_staff)):
     return db.query(models.VehicleCredential).all()
 
 
 @router.get("/residents", response_model=List[schemas.ResidentOut])
-def list_residents(db: Session = Depends(get_db)):
+def list_residents(db: Session = Depends(get_db), current_user: models.User = Depends(_gate_staff)):
     return db.query(models.Resident).all()

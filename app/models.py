@@ -80,6 +80,12 @@ class StaffStatus(str, enum.Enum):
     EXPIRED = "EXPIRED"
 
 
+class UserRole(str, enum.Enum):
+    RESIDENT = "RESIDENT"
+    GUARD = "GUARD"
+    ADMIN = "ADMIN"
+
+
 class Direction(str, enum.Enum):
     IN = "IN"
     OUT = "OUT"
@@ -202,6 +208,29 @@ class Complaint(Base):
     resolution_notes = Column(String, nullable=True)
 
     resident = relationship("Resident")
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String, nullable=False, unique=True, index=True)
+    password_hash = Column(String, nullable=False)
+    role = Column(SAEnum(UserRole), nullable=False)
+    # Set when role == RESIDENT: links this login to their Resident record.
+    # NULL for GUARD/ADMIN accounts, which aren't residents.
+    resident_id = Column(Integer, ForeignKey("residents.id"), nullable=True, unique=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    resident = relationship("Resident")
+
+    @property
+    def apartment_no(self):
+        """Convenience for API responses: the linked resident's flat number."""
+        return self.resident.apartment_no if self.resident is not None else None
+
 
 
 class Staff(Base):

@@ -6,9 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from .. import models, schemas, utils
+from ..auth import require_roles
 from ..database import get_db
 
 router = APIRouter(tags=["General Staff"])
+
+_admin_only = require_roles(models.UserRole.ADMIN)
+_gate_staff = require_roles(models.UserRole.GUARD, models.UserRole.ADMIN)
 
 
 def _generate_credential_value(db: Session) -> str:
@@ -22,7 +26,11 @@ def _generate_credential_value(db: Session) -> str:
 
 
 @router.post("/staff", response_model=schemas.StaffOut)
-def register_staff(payload: schemas.StaffCreate, db: Session = Depends(get_db)):
+def register_staff(
+    payload: schemas.StaffCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(_admin_only),
+):
     if payload.employed_by_resident_id is not None:
         resident = (
             db.query(models.Resident)
@@ -60,7 +68,11 @@ def register_staff(payload: schemas.StaffCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/verify-staff", response_model=schemas.VerifyStaffResponse)
-def verify_staff(payload: schemas.VerifyStaffRequest, db: Session = Depends(get_db)):
+def verify_staff(
+    payload: schemas.VerifyStaffRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(_gate_staff),
+):
     staff = (
         db.query(models.Staff)
         .filter(models.Staff.credential_value == payload.credential_value)
@@ -156,7 +168,10 @@ def verify_staff(payload: schemas.VerifyStaffRequest, db: Session = Depends(get_
 
 @router.post("/staff/{staff_id}/status", response_model=schemas.StaffOut)
 def update_staff_status(
-    staff_id: int, payload: schemas.StaffStatusUpdate, db: Session = Depends(get_db)
+    staff_id: int,
+    payload: schemas.StaffStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(_admin_only),
 ):
     staff = db.query(models.Staff).filter(models.Staff.id == staff_id).first()
     if staff is None:
@@ -173,6 +188,7 @@ def list_staff(
     role: Optional[models.StaffRole] = None,
     employed_by_resident_id: Optional[int] = None,
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(_gate_staff),
 ):
     query = db.query(models.Staff)
     if role is not None:

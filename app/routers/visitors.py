@@ -5,13 +5,26 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from .. import models, schemas, utils
+from ..auth import get_current_user, require_roles
 from ..database import get_db
 
 router = APIRouter(tags=["Visitors / OTP Entry"])
 
+_gate_staff = require_roles(models.UserRole.GUARD, models.UserRole.ADMIN)
+
 
 @router.post("/visitors", response_model=schemas.VisitorOut)
-def create_visitor(payload: schemas.VisitorCreate, db: Session = Depends(get_db)):
+def create_visitor(
+    payload: schemas.VisitorCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if current_user.role == models.UserRole.RESIDENT:
+        if current_user.resident_id != payload.host_resident_id:
+            raise HTTPException(status_code=403, detail="Residents can only register visitors for themselves.")
+    elif current_user.role not in (models.UserRole.GUARD, models.UserRole.ADMIN):
+        raise HTTPException(status_code=403, detail="You don't have permission to do this.")
+
     host = db.query(models.Resident).filter(models.Resident.id == payload.host_resident_id).first()
     if host is None:
         raise HTTPException(status_code=404, detail="Host resident not found.")
@@ -85,7 +98,11 @@ def create_visitor(payload: schemas.VisitorCreate, db: Session = Depends(get_db)
 
 
 @router.post("/verify-otp", response_model=schemas.VerifyOTPResponse)
-def verify_otp(payload: schemas.VerifyOTPRequest, db: Session = Depends(get_db)):
+def verify_otp(
+    payload: schemas.VerifyOTPRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(_gate_staff),
+):
     visitor = (
         db.query(models.Visitor)
         .filter(models.Visitor.otp_code == payload.otp_code)
@@ -164,5 +181,13 @@ def verify_otp(payload: schemas.VerifyOTPRequest, db: Session = Depends(get_db))
 
 
 @router.get("/visitors", response_model=List[schemas.VisitorOut])
-def list_visitors(db: Session = Depends(get_db)):
-    return db.query(models.Visitor).order_by(models.Visitor.created_at.desc()).all()
+def list_visitors(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    query = db.query(models.Visitor)
+    if current_user.role == models.UserRole.RESIDENT:
+        query = query.filter(models.Visitor.host_resident_id == current_user.resident_id)
+    elif current_user.role not in (models.UserRole.GUARD, models.UserRole.ADMIN):
+        raise HTTPException(status_code=403, detail="You don't have permission to do this.")
+    return query.order_by(models.Visitor.created_at.desc()).all()
