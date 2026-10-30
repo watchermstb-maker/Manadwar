@@ -244,6 +244,17 @@
   .error-text { color: var(--denied); font-size: 0.85rem; margin-top: 12px; min-height: 1.2em; }
   .note-text { color: var(--muted); font-size: 0.8rem; margin: 0 0 12px; line-height: 1.5; }
   .badge.used { background: var(--info-dim); color: var(--info); }
+
+  .picker { position: relative; }
+  .picker-list {
+    position: absolute; left: 0; right: 0; top: 100%; margin-top: 2px; z-index: 20;
+    background: var(--panel); border: 1px solid var(--info); border-radius: 6px;
+    max-height: 230px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+  .picker-item { padding: 8px 10px; cursor: pointer; font-size: 0.88rem; display: flex; justify-content: space-between; gap: 10px; }
+  .picker-item:hover { background: var(--info-dim); }
+  .picker-item span { color: var(--muted); font-family: "IBM Plex Mono", monospace; font-size: 0.8rem; }
+  .picker-empty { padding: 8px 10px; color: var(--muted); font-size: 0.85rem; font-style: italic; }
 </style>
 </head>
 <body>
@@ -291,7 +302,7 @@
 
       <!-- Visitors -->
       <div class="panel active" id="rpanel-visitors">
-        <p class="note-text">Register a visitor to get a one-time OTP. Share it with them; the guard checks it at the gate.</p>
+        <p class="note-text">Register a visitor to get an OTP. Share it with them; the guard checks it when they enter. It works for every entry (including coming back the same day) until their visit window ends.</p>
         <div class="field-grid">
           <div>
             <label for="rp-v-name">Visitor name</label>
@@ -338,8 +349,8 @@
 
         <h3 class="section-title" style="margin-top:24px;">My Visitors</h3>
         <table>
-          <thead><tr><th>#</th><th>Name</th><th>Type</th><th>OTP</th><th>OTP expires</th><th>Status</th></tr></thead>
-          <tbody id="rp-v-body"><tr class="empty-row"><td colspan="6">Loading...</td></tr></tbody>
+          <thead><tr><th>#</th><th>Name</th><th>Type</th><th>OTP</th><th>Valid until</th><th>Last entry</th><th>Status</th></tr></thead>
+          <tbody id="rp-v-body"><tr class="empty-row"><td colspan="7">Loading...</td></tr></tbody>
         </table>
       </div>
 
@@ -443,13 +454,12 @@
         <label for="otp-input">OTP code</label>
         <input type="text" id="otp-input" placeholder="6-digit code" />
 
-        <label for="otp-direction">Direction</label>
-        <select id="otp-direction">
-          <option value="IN">IN</option>
-          <option value="OUT">OUT</option>
-        </select>
+        <p class="note-text" style="margin-top:12px;">
+          The OTP is checked on <strong>entry only</strong>. Visitors can leave without one, and the
+          same OTP works for every re-entry until their visit window ends.
+        </p>
 
-        <button class="action" id="btn-verify-otp">Verify OTP</button>
+        <button class="action" id="btn-verify-otp">Verify OTP (entry)</button>
       </div>
 
       <div class="panel" id="vpanel-register">
@@ -466,8 +476,12 @@
 
         <div class="field-grid">
           <div>
-            <label for="reg-host">Host resident</label>
-            <select id="reg-host"></select>
+            <label for="reg-host-search">Host resident</label>
+            <div class="picker">
+              <input type="text" id="reg-host-search" placeholder="Search by name or flat number" autocomplete="off" />
+              <input type="hidden" id="reg-host" />
+              <div class="picker-list hidden" id="reg-host-list"></div>
+            </div>
           </div>
           <div>
             <label for="reg-visit-type">Visit type</label>
@@ -869,17 +883,71 @@
     statusDetail.textContent = detail || "";
   }
 
-  // Residents: loaded once, used to populate every resident dropdown.
+  // Residents: loaded once, used to populate every resident dropdown/picker.
   let residentsById = {};
+  let allResidents = [];
+
+  // Searchable resident picker: a text box that filters residents by name,
+  // flat number or phone, and stores the chosen resident id in a hidden
+  // input (same id the old <select> had, so callers just read .value).
+  function makeResidentPicker(valueId) {
+    const input = $(valueId + "-search");
+    const hidden = $(valueId);
+    const list = $(valueId + "-list");
+
+    function render() {
+      const q = input.value.trim().toLowerCase();
+      const matches = allResidents.filter(function (r) {
+        return !q || (r.name + " " + r.apartment_no + " " + (r.phone || "")).toLowerCase().indexOf(q) !== -1;
+      }).slice(0, 8);
+      list.innerHTML = matches.length
+        ? matches.map(function (r) {
+            return '<div class="picker-item" data-id="' + Number(r.id) + '"><strong>' + esc(r.name) + "</strong><span>" + esc(r.apartment_no) + "</span></div>";
+          }).join("")
+        : '<div class="picker-empty">No matching resident</div>';
+      list.classList.remove("hidden");
+    }
+
+    function choose(id) {
+      const r = residentsById[id];
+      if (!r) return;
+      hidden.value = String(r.id);
+      input.value = r.name + " (" + r.apartment_no + ")";
+      list.classList.add("hidden");
+    }
+
+    input.addEventListener("input", function () { hidden.value = ""; render(); });
+    input.addEventListener("focus", render);
+    input.addEventListener("blur", function () { list.classList.add("hidden"); });
+    input.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        const first = list.querySelector(".picker-item");
+        if (first) choose(Number(first.getAttribute("data-id")));
+      } else if (ev.key === "Escape") {
+        list.classList.add("hidden");
+      }
+    });
+    // mousedown (not click) so the input doesn't blur before we read the choice
+    list.addEventListener("mousedown", function (ev) {
+      const item = ev.target.closest(".picker-item");
+      if (item) { ev.preventDefault(); choose(Number(item.getAttribute("data-id"))); }
+    });
+
+    return { reset: function () { input.value = ""; hidden.value = ""; } };
+  }
+
+  const hostPicker = makeResidentPicker("reg-host");
 
   async function loadResidents() {
     const result = await getJSON("/residents");
     if (!result.ok) return;
     const residents = result.data;
+    allResidents = residents;
     residentsById = {};
     residents.forEach(function (r) { residentsById[r.id] = r; });
 
-    ["reg-host", "del-host", "bill-resident", "comp-resident"].forEach(function (id) {
+    ["del-host", "bill-resident", "comp-resident"].forEach(function (id) {
       const sel = $(id);
       if (!sel) return;
       sel.innerHTML = "";
@@ -962,13 +1030,12 @@
   // ---- Visitor tab: verify OTP
   $("btn-verify-otp").addEventListener("click", async function () {
     const code = $("otp-input").value.trim();
-    const direction = $("otp-direction").value;
     if (!code) {
       setStatus("denied", "NO OTP", "Enter the OTP code first.");
       return;
     }
     setStatus("idle", "CHECKING...", "");
-    const result = await postJSON("/verify-otp", { otp_code: code, gate_name: "MAIN_GATE", direction: direction });
+    const result = await postJSON("/verify-otp", { otp_code: code, gate_name: "MAIN_GATE", direction: "IN" });
     if (!result.ok) {
       setStatus("denied", "ERROR", result.error);
       return;
@@ -1036,10 +1103,11 @@
     const visitor = result.data;
     resultBox.innerHTML =
       "Visitor <strong>" + esc(visitor.name) + "</strong> registered.<br/>" +
-      "Share this OTP with them for gate entry (valid until " + esc(fmtTime(visitor.otp_expires_at)) + "):<br/>" +
+      "Share this OTP for gate entry. It works for every entry until " + esc(fmtTime(visitor.valid_until)) + ":<br/>" +
       '<span class="otp-code">' + esc(visitor.otp_code) + "</span>";
 
     setStatus("idle", "VISITOR REGISTERED", visitor.name + " — OTP issued.");
+    hostPicker.reset();
   });
 
   // ---- Delivery tab
@@ -1433,23 +1501,23 @@
   syncRpLongTerm();
 
   function visitorStatus(v) {
-    if (v.otp_verified) return "USED";
-    const exp = parseUTC(v.otp_expires_at);
-    return exp && exp < new Date() ? "EXPIRED" : "ACTIVE";
+    const end = parseUTC(v.valid_until);
+    return end && end < new Date() ? "EXPIRED" : "ACTIVE";
   }
 
   async function loadMyVisitors() {
     const body = $("rp-v-body");
     const result = await getJSON("/visitors");
-    if (!result.ok) { body.innerHTML = emptyRow(6, "Could not load visitors: " + result.error); return; }
-    if (result.data.length === 0) { body.innerHTML = emptyRow(6, "No visitors registered yet."); return; }
+    if (!result.ok) { body.innerHTML = emptyRow(7, "Could not load visitors: " + result.error); return; }
+    if (result.data.length === 0) { body.innerHTML = emptyRow(7, "No visitors registered yet."); return; }
     body.innerHTML = result.data.map(function (v) {
       return "<tr>" +
         "<td>" + Number(v.id) + "</td>" +
         "<td>" + esc(v.name) + "</td>" +
         "<td>" + esc(v.visit_type) + "</td>" +
         '<td class="mono">' + esc(v.otp_code) + "</td>" +
-        "<td>" + esc(fmtTime(v.otp_expires_at)) + "</td>" +
+        "<td>" + esc(fmtTime(v.valid_until)) + "</td>" +
+        "<td>" + esc(v.otp_verified_at ? fmtTime(v.otp_verified_at) : "—") + "</td>" +
         "<td>" + badge(visitorStatus(v)) + "</td>" +
       "</tr>";
     }).join("");
@@ -1479,7 +1547,7 @@
     const v = result.data;
     box.innerHTML =
       "Visitor <strong>" + esc(v.name) + "</strong> registered.<br/>" +
-      "Share this OTP with them (valid until " + esc(fmtTime(v.otp_expires_at)) + "):<br/>" +
+      "Share this OTP with them. It works for every entry until " + esc(fmtTime(v.valid_until)) + ":<br/>" +
       '<span class="otp-code">' + esc(v.otp_code) + "</span>";
     $("rp-v-name").value = "";
     $("rp-v-phone").value = "";

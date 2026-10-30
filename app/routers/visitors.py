@@ -13,6 +13,19 @@ router = APIRouter(tags=["Visitors / OTP Entry"])
 _gate_staff = require_roles(models.UserRole.GUARD, models.UserRole.ADMIN)
 
 
+def _unique_otp(db: Session, now: datetime) -> str:
+    for _ in range(50):
+        candidate = utils.generate_otp()
+        clash = (
+            db.query(models.Visitor)
+            .filter(models.Visitor.otp_code == candidate, models.Visitor.valid_until >= now)
+            .first()
+        )
+        if clash is None:
+            return candidate
+    raise HTTPException(status_code=500, detail="Could not generate a unique OTP; please retry.")
+
+
 @router.post("/visitors", response_model=schemas.VisitorOut)
 def create_visitor(
     payload: schemas.VisitorCreate,
@@ -46,8 +59,12 @@ def create_visitor(
             )
         valid_until = payload.valid_until
 
-    otp_code = utils.generate_otp()
-    otp_expires_at = now + timedelta(minutes=15)
+    # The OTP is valid for the whole visit window and can be used for any
+    # number of entries (a visitor may step out and come back the same
+    # day), so it expires with the visit itself. Because codes now live up
+    # to 24h+, make sure no other still-valid visitor already holds this one.
+    otp_code = _unique_otp(db, now)
+    otp_expires_at = valid_until
 
     visitor = models.Visitor(
         name=payload.name,
@@ -103,11 +120,25 @@ def verify_otp(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(_gate_staff),
 ):
-    visitor = (
+    # The OTP is an ENTRY credential only. Leaving the community needs no
+    # OTP, and exits are not tracked, so an OUT request is rejected rather
+    # than silently logged as an entry.
+    if payload.direction == models.Direction.OUT:
+        raise HTTPException(
+            status_code=400,
+            detail="Exit doesn't need an OTP. Visitors can leave freely; only entry is checked.",
+        )
+
+    now = datetime.utcnow()
+    matches = (
         db.query(models.Visitor)
         .filter(models.Visitor.otp_code == payload.otp_code)
-        .first()
+        .order_by(models.Visitor.valid_until.desc())
+        .all()
     )
+    # Prefer a still-valid holder of this code; fall back to an expired one
+    # only to give a more helpful message than "not recognized".
+    visitor = next((v for v in matches if v.valid_until >= now), matches[0] if matches else None)
 
     if visitor is None:
         utils.log_attempt(
@@ -115,7 +146,7 @@ def verify_otp(
             entry_method=models.EntryMethod.OTP,
             credential_value=payload.otp_code,
             gate_name=payload.gate_name,
-            direction=payload.direction,
+            direction=models.Direction.IN,
             access=models.AccessResult.DENIED,
         )
         return schemas.VerifyOTPResponse(
@@ -123,40 +154,24 @@ def verify_otp(
             message="Access denied: OTP not recognized.",
         )
 
-    now = datetime.utcnow()
-
-    if visitor.otp_verified:
+    if visitor.valid_until < now:
         utils.log_attempt(
             db,
             visitor_id=visitor.id,
             entry_method=models.EntryMethod.OTP,
             credential_value=payload.otp_code,
             gate_name=payload.gate_name,
-            direction=payload.direction,
+            direction=models.Direction.IN,
             access=models.AccessResult.DENIED,
         )
         return schemas.VerifyOTPResponse(
             access=models.AccessResult.DENIED,
-            message="Access denied: OTP already used.",
+            message="Access denied: visit window has expired.",
             visitor_name=visitor.name,
         )
 
-    if visitor.otp_expires_at < now or visitor.valid_until < now:
-        utils.log_attempt(
-            db,
-            visitor_id=visitor.id,
-            entry_method=models.EntryMethod.OTP,
-            credential_value=payload.otp_code,
-            gate_name=payload.gate_name,
-            direction=payload.direction,
-            access=models.AccessResult.DENIED,
-        )
-        return schemas.VerifyOTPResponse(
-            access=models.AccessResult.DENIED,
-            message="Access denied: OTP or visit window has expired.",
-            visitor_name=visitor.name,
-        )
-
+    # Granted. otp_verified / otp_verified_at record "has entered" and the
+    # most recent entry; the OTP itself stays valid for further entries.
     visitor.otp_verified = True
     visitor.otp_verified_at = now
     db.commit()
@@ -169,7 +184,7 @@ def verify_otp(
         entry_method=models.EntryMethod.OTP,
         credential_value=payload.otp_code,
         gate_name=payload.gate_name,
-        direction=payload.direction,
+        direction=models.Direction.IN,
         access=models.AccessResult.GRANTED,
     )
     return schemas.VerifyOTPResponse(
