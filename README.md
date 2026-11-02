@@ -21,6 +21,13 @@ project intentionally does NOT include" below.
   works for every entry during the visit window, so a visitor can leave and
   come back several times in a day. Exits are not tracked and need no OTP.
   The guard can search hosts by name or flat number when registering.
+  **Share with the visitor (v7.1, resident portal):** after a resident
+  registers a visitor, a **Send on WhatsApp** button opens WhatsApp to the
+  visitor's number with a ready message ("Hello <visitor>, <resident>
+  (Flat ..) is inviting you ... this is your OTP ..."), and a **QR visitor
+  pass** (visitor, host, flat, OTP, validity) is shown to screenshot. WhatsApp
+  links can only carry text, so the QR is shown on screen, not attached.
+  Nothing is sent automatically: the resident presses send in WhatsApp.
 - **Deliveries (v7.0)**: residents **announce** what they expect (platform,
   note, time window). The guard sees the list at the gate and taps
   **Let in** when the courier arrives. If nobody announced it, the guard
@@ -222,6 +229,7 @@ manadwar-backend/
       staff.py           General staff registration + /verify-staff
     static/
       index.html         Frontend: login + guard/admin console + resident portal
+      qrcode-lib.js      QR generator (qrcode-generator 1.4.4 by Kazuhiko Arase, MIT licence)
 ```
 
 ## Version history
@@ -234,3 +242,4 @@ manadwar-backend/
 | v6.2.1 | Fix: long-term visitor registration from the browser (timezone-aware dates) |
 | v7.0 | Delivery redesign: residents announce, guard matches, resident approves unexpected couriers, admin overview |
 | v7.0.1 | Phone fix: wide tables scroll sideways inside their card so action buttons are never cut off |
+| v7.1 | Resident portal: WhatsApp button (opens chat to the visitor with invite + OTP) and QR visitor pass after registering a visitor |

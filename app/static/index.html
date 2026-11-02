@@ -143,6 +143,15 @@
     font-size: 0.9rem;
   }
   button.action:hover { background: var(--info); color: #0b1620; }
+  a.wa-btn {
+    display: inline-block; margin-top: 12px; padding: 10px 18px; border-radius: 6px;
+    background: var(--granted-dim); border: 1px solid var(--granted); color: var(--text);
+    font-weight: 600; font-size: 0.9rem; text-decoration: none;
+  }
+  a.wa-btn:hover { background: var(--granted); color: #0b1620; }
+  .share-box { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .qr-box { background: #fff; padding: 6px; border-radius: 6px; display: inline-block; max-width: 100%; margin-top: 12px; line-height: 0; }
+  .qr-box svg { display: block; max-width: 100%; height: auto; }
   button.action.secondary { border-color: var(--border); background: var(--well); }
   button.action.secondary:hover { background: var(--border); color: var(--text); }
 
@@ -784,6 +793,7 @@
   </div>
 </div>
 
+<script src="/app/qrcode-lib.js"></script>
 <script>
 (function () {
   "use strict";
@@ -1686,6 +1696,75 @@
     }).join("");
   }
 
+  // ---- Share a visitor's OTP (v7.1): WhatsApp message + QR visitor pass
+  // Turn whatever the resident typed into the digits wa.me wants (country
+  // code first, no "+"). Returns null when it can't be a usable number.
+  function waNumber(raw) {
+    const text = String(raw || "").trim();
+    const intl = /^(\+|00)/.test(text);
+    let d = text.replace(/\D/g, "");
+    if (/^00/.test(text)) d = d.replace(/^00/, "");
+    if (!intl && d.length === 10) return "91" + d;                       // 98765 43210
+    if (!intl && d.length === 11 && d.charAt(0) === "0") return "91" + d.slice(1); // 098765 43210
+    if (d.length === 12 && d.slice(0, 2) === "91") return d;            // +91 98765 43210
+    if (intl && d.length >= 11 && d.length <= 15) return d;             // another country, typed with +
+    return null;
+  }
+
+  function hostLine() {
+    return currentUser.name + (currentUser.apartment_no ? " (Flat " + currentUser.apartment_no + ")" : "");
+  }
+
+  function inviteMessage(v) {
+    return "Hello " + v.name + ",\n\n" +
+      hostLine() + " is inviting you to visit.\n\n" +
+      "This is your ManaDwar entry OTP: " + v.otp_code + "\n\n" +
+      "Show it to the guard at the gate. It works for every entry until " + fmtTime(v.valid_until) + ".";
+  }
+
+  function passText(v) {
+    return "ManaDwar Visitor Pass\n" +
+      "Visitor: " + v.name + "\n" +
+      "Host: " + hostLine() + "\n" +
+      "OTP: " + v.otp_code + "\n" +
+      "Valid until: " + fmtTime(v.valid_until);
+  }
+
+  function shareBlock(v) {
+    const num = waNumber(v.phone);
+    const wa = num
+      ? '<a class="wa-btn" id="rp-v-wa" target="_blank" rel="noopener noreferrer" href="https://wa.me/' + num + "?text=" + encodeURIComponent(inviteMessage(v)) + '">Send on WhatsApp</a>' +
+        '<div class="note-text" style="margin:6px 0 0;">Opens WhatsApp to ' + esc(v.phone) + " with the message ready. Check it, then press send.</div>"
+      : '<div class="note-text" style="margin:0;">WhatsApp can\'t be opened because "' + esc(v.phone) + '" doesn\'t look like a full phone number. Share the OTP another way.</div>';
+    return '<div class="share-box">' + wa +
+      '<div class="qr-wrap"><div class="qr-box" id="rp-v-qr"></div>' +
+      '<div class="note-text" style="margin:6px 0 0;">Visitor pass QR: show it on your screen or take a screenshot to share. (WhatsApp links can only carry text, so the QR is not attached to the message.)</div></div></div>';
+  }
+
+  // Draws the QR as a crisp SVG from the library's own module grid. Nothing
+  // is sent anywhere: it is generated in this browser.
+  function qrSvg(text) {
+    if (typeof qrcode !== "function") return "";
+    try {
+      const qr = qrcode(0, "M");
+      qr.addData(text);
+      qr.make();
+      const n = qr.getModuleCount(), margin = 4, size = n + margin * 2;
+      let d = "";
+      for (let r = 0; r < n; r++) {
+        for (let c = 0; c < n; c++) {
+          if (qr.isDark(r, c)) d += "M" + (c + margin) + " " + (r + margin) + "h1v1h-1z";
+        }
+      }
+      // 5 screen pixels per square keeps edges sharp, which cameras scan best
+      const px = size * 5;
+      return '<svg xmlns="http://www.w3.org/2000/svg" width="' + px + '" height="' + px + '" viewBox="0 0 ' + size + " " + size + '" shape-rendering="crispEdges" role="img" aria-label="Visitor pass QR code">' +
+        '<rect width="' + size + '" height="' + size + '" fill="#fff"/><path d="' + d + '" fill="#000"/></svg>';
+    } catch (e) {
+      return "";
+    }
+  }
+
   $("rp-v-submit").addEventListener("click", async function () {
     const box = $("rp-v-result");
     box.classList.remove("hidden");
@@ -1711,7 +1790,13 @@
     box.innerHTML =
       "Visitor <strong>" + esc(v.name) + "</strong> registered.<br/>" +
       "Share this OTP with them. It works for every entry until " + esc(fmtTime(v.valid_until)) + ":<br/>" +
-      '<span class="otp-code">' + esc(v.otp_code) + "</span>";
+      '<span class="otp-code">' + esc(v.otp_code) + "</span>" +
+      shareBlock(v);
+    const qrSlot = box.querySelector(".qr-box");
+    if (qrSlot) {
+      const svg = qrSvg(passText(v));
+      if (svg) qrSlot.innerHTML = svg; else qrSlot.parentNode.classList.add("hidden");
+    }
     $("rp-v-name").value = "";
     $("rp-v-phone").value = "";
     $("rp-v-purpose").value = "";
