@@ -1,11 +1,13 @@
 import secrets
+import uuid
 from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from .. import models, schemas, utils
+from .. import models, notify, schemas, utils
+from ..audit import audit
 from ..auth import require_roles
 from ..database import get_db
 
@@ -40,6 +42,11 @@ def register_staff(
         if resident is None:
             raise HTTPException(status_code=404, detail="Employing resident not found.")
 
+    if not payload.consent_given:
+        raise HTTPException(
+            status_code=400,
+            detail="Confirm that the staff member has agreed to their ID being recorded for the stated purpose.",
+        )
     digits = "".join(ch for ch in payload.aadhaar_number if ch.isdigit())
     if len(digits) != 12:
         raise HTTPException(status_code=400, detail="aadhaar_number must be exactly 12 digits.")
@@ -57,6 +64,7 @@ def register_staff(
         employed_by_resident_id=payload.employed_by_resident_id,
         aadhaar_hash=aadhaar_hash,
         aadhaar_last4=aadhaar_last4,
+        aadhaar_consent_at=datetime.utcnow(),
         credential_value=_generate_credential_value(db),
         status=models.StaffStatus.ACTIVE,
         expires_at=payload.expires_at,
@@ -64,6 +72,7 @@ def register_staff(
     db.add(staff)
     db.commit()
     db.refresh(staff)
+    audit(db, current_user, "staff.register", "staff", staff.id, f"{staff.name} ({staff.role.value})")
     return staff
 
 
@@ -82,6 +91,7 @@ def verify_staff(
     if staff is None:
         utils.log_attempt(
             db,
+            actor=current_user,
             entry_method=models.EntryMethod.STAFF,
             credential_value=payload.credential_value,
             gate_name=payload.gate_name,
@@ -116,6 +126,7 @@ def verify_staff(
     if staff.status == models.StaffStatus.BLOCKED:
         utils.log_attempt(
             db,
+            actor=current_user,
             staff_id=staff.id,
             entry_method=models.EntryMethod.STAFF,
             credential_value=payload.credential_value,
@@ -133,6 +144,7 @@ def verify_staff(
     if staff.status == models.StaffStatus.EXPIRED:
         utils.log_attempt(
             db,
+            actor=current_user,
             staff_id=staff.id,
             entry_method=models.EntryMethod.STAFF,
             credential_value=payload.credential_value,
@@ -150,6 +162,7 @@ def verify_staff(
     # ACTIVE -> grant.
     utils.log_attempt(
         db,
+        actor=current_user,
         staff_id=staff.id,
         entry_method=models.EntryMethod.STAFF,
         credential_value=payload.credential_value,
@@ -157,6 +170,14 @@ def verify_staff(
         direction=payload.direction,
         access=models.AccessResult.GRANTED,
     )
+    if staff.employed_by_resident_id is not None:
+        arrived = payload.direction == models.Direction.IN
+        notify.notify_resident(
+            db, staff.employed_by_resident_id, "STAFF",
+            f"{staff.name} {'arrived' if arrived else 'left'}",
+            f"{staff.role.value.title()} {'entered' if arrived else 'left'} the society.",
+            "staff", staff.id,
+        )
     return schemas.VerifyStaffResponse(
         access=models.AccessResult.GRANTED,
         message="Access granted.",
@@ -180,6 +201,26 @@ def update_staff_status(
     staff.status = payload.status
     db.commit()
     db.refresh(staff)
+    audit(db, current_user, "staff.status", "staff", staff.id, f"{staff.name} -> {payload.status.value}")
+    return staff
+
+
+@router.post("/staff/{staff_id}/erase-aadhaar", response_model=schemas.StaffOut)
+def erase_staff_aadhaar(
+    staff_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(_admin_only),
+):
+    """Remove the stored ID fingerprint and last 4 digits (for example when a
+    contract ends or the person asks). The staff record and gate history stay."""
+    staff = db.query(models.Staff).filter(models.Staff.id == staff_id).first()
+    if staff is None:
+        raise HTTPException(status_code=404, detail="Staff member not found.")
+    staff.aadhaar_hash = "ERASED-" + uuid.uuid4().hex   # column is unique and required
+    staff.aadhaar_last4 = "XXXX"
+    db.commit()
+    db.refresh(staff)
+    audit(db, current_user, "staff.erase_aadhaar", "staff", staff.id, staff.name)
     return staff
 
 

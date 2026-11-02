@@ -4,3 +4,6 @@ __pycache__/
 *.db
 .env
 uploads/
+certs/
+backups/
+.dev_secret

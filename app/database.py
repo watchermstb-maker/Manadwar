@@ -8,6 +8,15 @@ load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./manadwar.db")
 
+# A SQLite file inside a synced folder (OneDrive, Dropbox, Google Drive) can be
+# locked or duplicated by the sync client while the app is writing to it.
+if DATABASE_URL.startswith("sqlite") and "onedrive" in os.path.abspath(DATABASE_URL.replace("sqlite:///", "", 1)).lower():
+    print(
+        "WARNING: the database file is inside a OneDrive folder. Set DATABASE_URL in .env to a path "
+        "outside it, e.g. sqlite:///C:/manadwar-data/manadwar.db (create the folder first).",
+        file=__import__("sys").stderr,
+    )
+
 # SQLite needs this flag for use with FastAPI's threaded request handling.
 # It is ignored by other database backends (e.g. Postgres), so this stays
 # safe if DATABASE_URL is later swapped to a Postgres connection string.

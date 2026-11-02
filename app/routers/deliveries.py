@@ -12,15 +12,24 @@ Flow
   WALK_IN_TTL, flip to EXPIRED lazily whenever deliveries are read/acted on
   (same no-scheduler pattern used elsewhere in this project).
 Exits are not tracked.
+
+v8.3 additions
+- Standing rules: a resident can say "always allow Swiggy", "leave Amazon at the
+  gate" or "never admit Dunzo". Rules are applied the moment a guard logs an
+  unexpected courier, so most of them never need an approval tap.
+- The guard can attach a photo of the parcel; the resident sees it.
+- Residents are notified at every step.
 """
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from .. import models, schemas, utils
+from .. import models, notify, schemas, uploads, utils
+from ..audit import audit
 from ..auth import get_current_user, require_roles
 from ..database import get_db
 
@@ -119,6 +128,7 @@ def announce_delivery(
         description=(payload.description or "").strip() or None,
         expected_from=payload.expected_from,
         expected_until=payload.expected_until,
+        leave_at_gate=payload.leave_at_gate,
         status=S.EXPECTED,
     )
     db.add(delivery)
@@ -146,9 +156,12 @@ def decide_walk_in(
     delivery.decided_at = now
     db.commit()
     db.refresh(delivery)
+    if current_user.role == models.UserRole.ADMIN:
+        audit(db, current_user, "delivery.decide", "delivery", delivery.id,
+              f"{'approved' if payload.approve else 'denied'} {_label(delivery)} for resident {delivery.host_resident_id}")
     if not payload.approve:
         utils.log_attempt(
-            db, delivery_id=delivery.id, entry_method=models.EntryMethod.DELIVERY,
+            db, actor=current_user, delivery_id=delivery.id, entry_method=models.EntryMethod.DELIVERY,
             credential_value=_label(delivery), gate_name="MAIN_GATE",
             direction=models.Direction.IN, access=models.AccessResult.DENIED,
         )
@@ -169,6 +182,8 @@ def cancel_delivery(
     delivery.status = S.CANCELLED
     db.commit()
     db.refresh(delivery)
+    if current_user.role == models.UserRole.ADMIN:
+        audit(db, current_user, "delivery.cancel", "delivery", delivery.id, _label(delivery))
     return delivery
 
 
@@ -197,9 +212,51 @@ def log_walk_in(
         description=(payload.description or "").strip() or None,
         status=S.AWAITING_APPROVAL,
     )
+
+    # A standing rule from the resident answers for them straight away.
+    rule = None
+    if platform:
+        rule = (
+            db.query(models.DeliveryRule)
+            .filter(models.DeliveryRule.resident_id == payload.host_resident_id,
+                    models.DeliveryRule.platform_key == platform.lower())
+            .first()
+        )
+    now = datetime.utcnow()
+    A = models.DeliveryRuleAction
+    if rule is not None:
+        delivery.decided_at = now
+        if rule.action == A.ALLOW:
+            delivery.status = S.APPROVED
+            delivery.rule_applied = f"Resident's rule: always allow {rule.platform}"
+        elif rule.action == A.LEAVE_AT_GATE:
+            delivery.status = S.APPROVED
+            delivery.leave_at_gate = True
+            delivery.rule_applied = f"Resident's rule: leave {rule.platform} at the gate"
+        else:
+            delivery.status = S.DENIED
+            delivery.rule_applied = f"Resident's rule: never admit {rule.platform}"
     db.add(delivery)
     db.commit()
     db.refresh(delivery)
+
+    who = delivery.platform or delivery.courier_name or "A courier"
+    if rule is None:
+        notify.notify_resident(
+            db, delivery.host_resident_id, "DELIVERY_APPROVAL", f"{who} is at the gate",
+            "Approve or deny the delivery so the guard knows.", "delivery", delivery.id,
+        )
+    else:
+        if delivery.status == S.DENIED:
+            utils.log_attempt(
+                db, actor=current_user, delivery_id=delivery.id, entry_method=models.EntryMethod.DELIVERY,
+                credential_value=_label(delivery), gate_name="MAIN_GATE",
+                direction=models.Direction.IN, access=models.AccessResult.DENIED,
+            )
+        notify.notify_resident(
+            db, delivery.host_resident_id, "DELIVERY", f"{who}: {delivery.rule_applied.split(': ', 1)[1]}",
+            "Handled by your delivery rule.", "delivery", delivery.id,
+        )
     return delivery
 
 
@@ -220,12 +277,19 @@ def admit_delivery(
 
     delivery.status = S.ADMITTED
     delivery.admitted_at = now
+    delivery.admitted_by_user_id = current_user.id
     db.commit()
     db.refresh(delivery)
     utils.log_attempt(
-        db, delivery_id=delivery.id, entry_method=models.EntryMethod.DELIVERY,
+        db, actor=current_user, delivery_id=delivery.id, entry_method=models.EntryMethod.DELIVERY,
         credential_value=_label(delivery), gate_name=payload.gate_name,
         direction=models.Direction.IN, access=models.AccessResult.GRANTED,
+    )
+    notify.notify_resident(
+        db, delivery.host_resident_id, "DELIVERY",
+        f"{_label(delivery).capitalize()} " + ("parcel left with security" if delivery.leave_at_gate else "let in"),
+        "Collect it from the security desk." if delivery.leave_at_gate else "The courier is on the way to your flat.",
+        "delivery", delivery.id,
     )
     return delivery
 
@@ -244,12 +308,134 @@ def refuse_delivery(
     delivery.status = S.DENIED
     db.commit()
     db.refresh(delivery)
+    notify.notify_resident(
+        db, delivery.host_resident_id, "DELIVERY", f"{_label(delivery).capitalize()} was turned away",
+        "The guard refused this delivery.", "delivery", delivery.id,
+    )
     utils.log_attempt(
-        db, delivery_id=delivery.id, entry_method=models.EntryMethod.DELIVERY,
+        db, actor=current_user, delivery_id=delivery.id, entry_method=models.EntryMethod.DELIVERY,
         credential_value=_label(delivery), gate_name=payload.gate_name,
         direction=models.Direction.IN, access=models.AccessResult.DENIED,
     )
     return delivery
+
+
+# ---------------------------------------------------------------------------
+# parcel photo
+# ---------------------------------------------------------------------------
+
+@router.post("/deliveries/{delivery_id}/parcel-photo", response_model=schemas.DeliveryOut)
+def upload_parcel_photo(
+    delivery_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(_gate_staff),
+):
+    delivery = _get_delivery(db, delivery_id)
+    if delivery.status in (S.DENIED, S.CANCELLED, S.EXPIRED):
+        raise _not_in_state(delivery, "attach a photo to")
+    name = uploads.save_image("parcels", file)
+    previous = delivery.parcel_photo_path
+    delivery.parcel_photo_path = name
+    db.commit()
+    db.refresh(delivery)
+    uploads.remove_image("parcels", previous)
+    notify.notify_resident(
+        db, delivery.host_resident_id, "DELIVERY", f"Photo of your {_label(delivery)} parcel",
+        "Open Deliveries to see it.", "delivery", delivery.id,
+    )
+    return delivery
+
+
+@router.get("/deliveries/{delivery_id}/parcel-photo")
+def get_parcel_photo(
+    delivery_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    delivery = _get_delivery(db, delivery_id)
+    if current_user.role == models.UserRole.RESIDENT and delivery.host_resident_id != current_user.resident_id:
+        raise HTTPException(status_code=403, detail="You can only see your own deliveries.")
+    path = uploads.image_path("parcels", delivery.parcel_photo_path)
+    return FileResponse(
+        path, media_type=uploads.MEDIA_TYPES.get(path.suffix.lstrip("."), "application/octet-stream"),
+        headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=300"},
+    )
+
+
+# ---------------------------------------------------------------------------
+# standing rules ("always allow Swiggy")
+# ---------------------------------------------------------------------------
+
+@router.get("/delivery-rules", response_model=List[schemas.DeliveryRuleOut])
+def list_rules(
+    resident_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    query = db.query(models.DeliveryRule)
+    if current_user.role == models.UserRole.RESIDENT:
+        query = query.filter(models.DeliveryRule.resident_id == current_user.resident_id)
+    elif current_user.role == models.UserRole.ADMIN:
+        if resident_id is not None:
+            query = query.filter(models.DeliveryRule.resident_id == resident_id)
+    else:
+        raise HTTPException(status_code=403, detail="You don't have permission to do this.")
+    return query.order_by(models.DeliveryRule.platform).all()
+
+
+@router.post("/delivery-rules", response_model=schemas.DeliveryRuleOut)
+def set_rule(
+    payload: schemas.DeliveryRuleCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Create the rule for a platform, or change it if one already exists."""
+    if current_user.role == models.UserRole.RESIDENT:
+        resident_id = current_user.resident_id
+    elif current_user.role == models.UserRole.ADMIN:
+        resident_id = payload.resident_id
+        if resident_id is None:
+            raise HTTPException(status_code=400, detail="Choose the resident.")
+    else:
+        raise HTTPException(status_code=403, detail="You don't have permission to do this.")
+    _require_host(db, resident_id)
+    key = payload.platform.lower()
+    rule = (
+        db.query(models.DeliveryRule)
+        .filter(models.DeliveryRule.resident_id == resident_id, models.DeliveryRule.platform_key == key)
+        .first()
+    )
+    if rule is None:
+        if db.query(models.DeliveryRule).filter(models.DeliveryRule.resident_id == resident_id).count() >= 30:
+            raise HTTPException(status_code=400, detail="You have reached the limit of 30 delivery rules.")
+        rule = models.DeliveryRule(resident_id=resident_id, platform=payload.platform, platform_key=key, action=payload.action)
+        db.add(rule)
+    else:
+        rule.action = payload.action
+        rule.platform = payload.platform
+    db.commit()
+    db.refresh(rule)
+    return rule
+
+
+@router.delete("/delivery-rules/{rule_id}")
+def delete_rule(
+    rule_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    rule = db.query(models.DeliveryRule).filter(models.DeliveryRule.id == rule_id).first()
+    if rule is None:
+        raise HTTPException(status_code=404, detail="Rule not found.")
+    if current_user.role == models.UserRole.RESIDENT:
+        if rule.resident_id != current_user.resident_id:
+            raise HTTPException(status_code=403, detail="You can only manage your own rules.")
+    elif current_user.role != models.UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="You don't have permission to do this.")
+    db.delete(rule)
+    db.commit()
+    return {"deleted": True}
 
 
 # ---------------------------------------------------------------------------

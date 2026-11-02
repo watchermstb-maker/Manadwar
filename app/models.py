@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, Float
+from sqlalchemy import Boolean, Column, DateTime, Float, UniqueConstraint
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy import ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
@@ -57,6 +57,19 @@ class DeliveryStatus(str, enum.Enum):
     EXPIRED = "EXPIRED"                      # window passed / nobody answered in time
 
 
+class DeliveryRuleAction(str, enum.Enum):
+    ALLOW = "ALLOW"                  # let this platform in without asking me
+    LEAVE_AT_GATE = "LEAVE_AT_GATE"  # security takes the parcel; courier does not come up
+    DENY = "DENY"                    # never admit this platform
+    # (no rule = the guard asks the resident, as before)
+
+
+class SosStatus(str, enum.Enum):
+    ACTIVE = "ACTIVE"
+    ACKNOWLEDGED = "ACKNOWLEDGED"
+    RESOLVED = "RESOLVED"
+
+
 class BillStatus(str, enum.Enum):
     PENDING = "PENDING"
     PAID = "PAID"
@@ -107,6 +120,7 @@ class Resident(Base):
     name = Column(String, nullable=False)
     apartment_no = Column(String, nullable=False)
     phone = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
     vehicles = relationship("Vehicle", back_populates="resident")
 
@@ -140,6 +154,11 @@ class Visitor(Base):
     otp_verified = Column(Boolean, nullable=False, default=False)
     otp_verified_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    cancelled_at = Column(DateTime, nullable=True)
+    # Optional photo the guard took at the gate (file under uploads/visitors).
+    photo_path = Column(String, nullable=True)
+    photo_at = Column(DateTime, nullable=True)
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     host_resident = relationship("Resident")
     vehicle_credential = relationship(
@@ -183,8 +202,31 @@ class Delivery(Base):
     requested_at = Column(DateTime, default=datetime.utcnow)  # when announced / logged
     decided_at = Column(DateTime, nullable=True)   # resident's approve/deny time
     admitted_at = Column(DateTime, nullable=True)  # when the guard let them in
+    leave_at_gate = Column(Boolean, nullable=False, default=False)  # security takes the parcel
+    rule_applied = Column(String, nullable=True)   # e.g. "ALLOW rule: Swiggy"
+    parcel_photo_path = Column(String, nullable=True)
+    admitted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     host_resident = relationship("Resident")
+
+    @property
+    def has_parcel_photo(self) -> bool:
+        return bool(self.parcel_photo_path)
+
+
+class DeliveryRule(Base):
+    """A resident's standing instruction for a platform (e.g. always allow Swiggy)."""
+    __tablename__ = "delivery_rules"
+    __table_args__ = (UniqueConstraint("resident_id", "platform_key", name="uq_rule_resident_platform"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    resident_id = Column(Integer, ForeignKey("residents.id"), nullable=False, index=True)
+    platform = Column(String, nullable=False)       # as typed, for display
+    platform_key = Column(String, nullable=False)   # lower-case, for matching
+    action = Column(SAEnum(DeliveryRuleAction), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    resident = relationship("Resident")
 
 
 class MaintenanceBill(Base):
@@ -217,6 +259,8 @@ class Complaint(Base):
     # Server-generated filename of an optional photo under the uploads
     # folder (never a client-supplied name or path).
     image_path = Column(String, nullable=True)
+    assigned_to = Column(String, nullable=True)   # e.g. "Plumber Raju"
+    assigned_at = Column(DateTime, nullable=True)
 
     resident = relationship("Resident")
 
@@ -235,9 +279,14 @@ class User(Base):
     role = Column(SAEnum(UserRole), nullable=False)
     # Set when role == RESIDENT: links this login to their Resident record.
     # NULL for GUARD/ADMIN accounts, which aren't residents.
-    resident_id = Column(Integer, ForeignKey("residents.id"), nullable=True, unique=True)
+    # Several logins may share one resident record (family members).
+    resident_id = Column(Integer, ForeignKey("residents.id"), nullable=True, index=True)
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    # Bumped on password change/reset/deactivation so older tokens stop working.
+    token_version = Column(Integer, nullable=False, default=0)
+    must_change_password = Column(Boolean, nullable=False, default=False)
+    last_login_at = Column(DateTime, nullable=True)
 
     resident = relationship("Resident")
 
@@ -266,6 +315,7 @@ class Staff(Base):
     # response.
     aadhaar_hash = Column(String, nullable=False, unique=True, index=True)
     aadhaar_last4 = Column(String(4), nullable=False)
+    aadhaar_consent_at = Column(DateTime, nullable=True)  # when consent to hold the ID was recorded
     credential_value = Column(String, nullable=False, unique=True, index=True)
     status = Column(SAEnum(StaffStatus), nullable=False, default=StaffStatus.ACTIVE)
     # NULL = permanent staff; set for a temporary/contract worker.
@@ -284,9 +334,138 @@ class EntryLog(Base):
     visitor_id = Column(Integer, ForeignKey("visitors.id"), nullable=True)
     delivery_id = Column(Integer, ForeignKey("deliveries.id"), nullable=True)
     staff_id = Column(Integer, ForeignKey("staff.id"), nullable=True)
+    recurring_visitor_id = Column(Integer, ForeignKey("recurring_visitors.id"), nullable=True)
+    # Who performed the action (guard/admin at the gate, resident for a denial).
+    actor_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     entry_method = Column(SAEnum(EntryMethod), nullable=False, default=EntryMethod.RFID)
     credential_value = Column(String, nullable=False)
     gate_name = Column(String, nullable=False, default="MAIN_GATE")
     direction = Column(SAEnum(Direction), nullable=False, default=Direction.IN)
     access = Column(SAEnum(AccessResult), nullable=False)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+
+    actor = relationship("User", foreign_keys=[actor_user_id])
+    vehicle = relationship("Vehicle", foreign_keys=[vehicle_id])
+    visitor = relationship("Visitor", foreign_keys=[visitor_id])
+    delivery = relationship("Delivery", foreign_keys=[delivery_id])
+    staff = relationship("Staff", foreign_keys=[staff_id])
+    recurring_visitor = relationship("RecurringVisitor", foreign_keys=[recurring_visitor_id])
+
+
+class Invite(Base):
+    """One-time code an admin hands to a resident so they can create their login."""
+    __tablename__ = "invites"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String, nullable=False, unique=True, index=True)
+    resident_id = Column(Integer, ForeignKey("residents.id"), nullable=False)
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime, nullable=True)
+    used_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    resident = relationship("Resident")
+
+
+class RecurringVisitor(Base):
+    """A pre-approved repeat visitor (milkman, tutor, regular cab): one code
+    that works on the chosen weekdays inside a daily time window."""
+    __tablename__ = "recurring_visitors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    host_resident_id = Column(Integer, ForeignKey("residents.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    phone = Column(String, nullable=False)
+    purpose = Column(String, nullable=True)
+    days = Column(String, nullable=False)            # "0,2,4" = Mon, Wed, Fri
+    start_minute = Column(Integer, nullable=False)   # society-local minutes after midnight
+    end_minute = Column(Integer, nullable=False)
+    valid_until = Column(DateTime, nullable=True)    # naive UTC; NULL = no end date
+    otp_code = Column(String, nullable=False, index=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_entry_at = Column(DateTime, nullable=True)
+
+    host_resident = relationship("Resident")
+
+
+class ComplaintComment(Base):
+    __tablename__ = "complaint_comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    complaint_id = Column(Integer, ForeignKey("complaints.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    author_name = Column(String, nullable=False)
+    author_role = Column(String, nullable=False)
+    body = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    kind = Column(String, nullable=False)
+    title = Column(String, nullable=False)
+    body = Column(String, nullable=True)
+    ref_type = Column(String, nullable=True)
+    ref_id = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    read_at = Column(DateTime, nullable=True)
+
+
+class Notice(Base):
+    __tablename__ = "notices"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    body = Column(String, nullable=False)
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    pinned = Column(Boolean, nullable=False, default=False)
+    expires_at = Column(DateTime, nullable=True)
+    is_deleted = Column(Boolean, nullable=False, default=False)
+
+
+class NoticeRead(Base):
+    __tablename__ = "notice_reads"
+    __table_args__ = (UniqueConstraint("notice_id", "user_id", name="uq_notice_user"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    notice_id = Column(Integer, ForeignKey("notices.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    read_at = Column(DateTime, default=datetime.utcnow)
+
+
+class SosAlert(Base):
+    __tablename__ = "sos_alerts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    resident_id = Column(Integer, ForeignKey("residents.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    kind = Column(String, nullable=False, default="OTHER")   # MEDICAL / FIRE / INTRUDER / OTHER
+    message = Column(String, nullable=True)
+    status = Column(SAEnum(SosStatus), nullable=False, default=SosStatus.ACTIVE)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    acknowledged_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    acknowledged_at = Column(DateTime, nullable=True)
+    resolved_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+    note = Column(String, nullable=True)
+
+    resident = relationship("Resident")
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    user_name = Column(String, nullable=True)
+    action = Column(String, nullable=False)
+    target_type = Column(String, nullable=True)
+    target_id = Column(String, nullable=True)
+    detail = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)

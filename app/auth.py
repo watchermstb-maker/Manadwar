@@ -1,27 +1,23 @@
 """Password hashing, JWT issuing/verification, and role-check dependencies.
 
-This is intentionally simple (HS256 JWT, bcrypt passwords, one shared
-secret) -- appropriate for a single-community pilot, not a multi-tenant
-SaaS. JWT_SECRET_KEY MUST be set to a real random value in .env before
-this is ever exposed beyond your own laptop; the fallback below is for
-local development only.
+HS256 JWT + bcrypt passwords + one shared secret: appropriate for a
+single-community pilot. The secret comes from config.py, which refuses to start
+in production without a real JWT_SECRET_KEY.
 """
-import os
 from datetime import datetime, timedelta
 from typing import Optional
 
+import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-import bcrypt
 from sqlalchemy.orm import Session
 
 from . import models
+from .config import ACCESS_TOKEN_EXPIRE_MINUTES, GUARD_TOKEN_EXPIRE_MINUTES, SECRET_KEY
 from .database import get_db
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-only-insecure-secret-change-before-real-use")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "60"))
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
@@ -43,10 +39,25 @@ def verify_password(plain_password: str, password_hash: str) -> bool:
         return False
 
 
+def token_lifetime(role: models.UserRole) -> timedelta:
+    minutes = GUARD_TOKEN_EXPIRE_MINUTES if role == models.UserRole.GUARD else ACCESS_TOKEN_EXPIRE_MINUTES
+    return timedelta(minutes=minutes)
+
+
+def issue_token(user: models.User) -> str:
+    payload = {
+        "sub": str(user.id),
+        "role": user.role.value,
+        "tv": user.token_version or 0,
+        "exp": datetime.utcnow() + token_lifetime(user.role),
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """Kept for compatibility; prefer issue_token(user)."""
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    to_encode.update({"exp": expire})
+    to_encode["exp"] = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -63,11 +74,12 @@ def get_current_user(
         user_id = payload.get("sub")
         if user_id is None:
             raise credentials_exception
-    except JWTError:
+        token_tv = int(payload.get("tv", 0))
+    except (JWTError, ValueError):
         raise credentials_exception
 
     user = db.query(models.User).filter(models.User.id == int(user_id)).first()
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or (user.token_version or 0) != token_tv:
         raise credentials_exception
     return user
 

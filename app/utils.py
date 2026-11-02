@@ -1,7 +1,9 @@
 import hashlib
-import random
+import hmac
+import secrets
 
 from . import models
+from .config import AADHAAR_KEY
 
 
 def generate_otp(length: int = 6) -> str:
@@ -11,7 +13,7 @@ def generate_otp(length: int = 6) -> str:
     the API response / shown in the demo UI (no third-party SMS
     integration exists in this prototype).
     """
-    return "".join(str(random.randint(0, 9)) for _ in range(length))
+    return "".join(secrets.choice("0123456789") for _ in range(length))
 
 
 def log_attempt(
@@ -27,6 +29,8 @@ def log_attempt(
     access,
     delivery_id=None,
     staff_id=None,
+    recurring_visitor_id=None,
+    actor=None,
 ):
     """Record one gate-entry attempt (granted or denied) to the EntryLog."""
     entry = models.EntryLog(
@@ -35,6 +39,8 @@ def log_attempt(
         visitor_id=visitor_id,
         delivery_id=delivery_id,
         staff_id=staff_id,
+        recurring_visitor_id=recurring_visitor_id,
+        actor_user_id=actor.id if actor is not None else None,
         entry_method=entry_method,
         credential_value=credential_value,
         gate_name=gate_name,
@@ -48,15 +54,15 @@ def log_attempt(
 
 
 def hash_aadhaar(aadhaar_number: str):
-    """Hash an Aadhaar (government ID) number for storage.
+    """Fingerprint an Aadhaar (government ID) number for storage.
 
-    Returns (hash_hex, last4). The raw number is never persisted anywhere --
-    only this SHA-256 hash (for exact-match dedup lookups, so the same
-    person can't be registered as staff twice) and the last 4 digits (for
-    human display/verification, the standard masking convention for Indian
-    ID numbers) are stored.
+    Returns (fingerprint_hex, last4). The raw number is never persisted. The
+    fingerprint is an HMAC-SHA256 keyed with a server-side secret
+    (AADHAAR_HASH_KEY), so a leaked database alone cannot be used to
+    brute-force the 12-digit numbers. It exists only so the same person
+    cannot be registered twice; last4 is for human verification.
     """
     digits = "".join(ch for ch in aadhaar_number if ch.isdigit())
-    hash_hex = hashlib.sha256(digits.encode("utf-8")).hexdigest()
+    hash_hex = hmac.new(AADHAAR_KEY, digits.encode("utf-8"), hashlib.sha256).hexdigest()
     last4 = digits[-4:] if len(digits) >= 4 else digits
     return hash_hex, last4
