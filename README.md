@@ -28,6 +28,13 @@ project intentionally does NOT include" below.
   pass** (visitor, host, flat, OTP, validity) is shown to screenshot. WhatsApp
   links can only carry text, so the QR is shown on screen, not attached.
   Nothing is sent automatically: the resident presses send in WhatsApp.
+  **QR scanning at the gate (v7.2):** on the guard's Visitor > Verify OTP
+  screen, **Scan QR code** turns on the camera and a valid visitor pass shows
+  ACCESS GRANTED (anything else, ACCESS DENIED), with the same entry log as
+  typing the OTP. A pass held in view is counted once (5-second cooldown).
+  **Take photo of QR** does the same from a photo, and works on a phone over
+  plain Wi-Fi. Typing the OTP stays as the failsafe. Camera images are read
+  in the browser and never uploaded.
 - **Deliveries (v7.0)**: residents **announce** what they expect (platform,
   note, time window). The guard sees the list at the gate and taps
   **Let in** when the courier arrives. If nobody announced it, the guard
@@ -95,6 +102,18 @@ del manadwar.db      # Windows
 python -m app.seed
 uvicorn app.main:app --reload
 ```
+
+## Using the QR scanner on a phone
+
+Browsers only allow **live camera** access on `localhost` or HTTPS. So:
+
+- On the laptop running the app, open `http://127.0.0.1:8000/` and live
+  scanning works with its webcam.
+- On a phone over Wi-Fi (`http://<laptop-ip>:8000`), live scanning is blocked
+  by the browser; the guard taps **Take photo of QR** instead (works over
+  plain http), or types the OTP. For live scanning on phones, serve the app
+  over HTTPS (for example behind a tunnel or a reverse proxy with a
+  certificate).
 
 ## Seeded demo data
 
@@ -230,6 +249,7 @@ manadwar-backend/
     static/
       index.html         Frontend: login + guard/admin console + resident portal
       qrcode-lib.js      QR generator (qrcode-generator 1.4.4 by Kazuhiko Arase, MIT licence)
+      jsqr-lib.js        QR reader (jsQR 1.4.0 by Cosmo Wolfe, Apache-2.0; see jsqr-LICENSE.txt)
 ```
 
 ## Version history
@@ -243,3 +263,4 @@ manadwar-backend/
 | v7.0 | Delivery redesign: residents announce, guard matches, resident approves unexpected couriers, admin overview |
 | v7.0.1 | Phone fix: wide tables scroll sideways inside their card so action buttons are never cut off |
 | v7.1 | Resident portal: WhatsApp button (opens chat to the visitor with invite + OTP) and QR visitor pass after registering a visitor |
+| v7.2 | Guard QR scanner: live camera scan plus take-photo fallback, auto ACCESS GRANTED / DENIED; typed OTP kept as failsafe |

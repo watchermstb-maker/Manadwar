@@ -18,7 +18,7 @@ app = FastAPI(
         "security) access, and JWT-based authentication with ADMIN/GUARD/"
         "RESIDENT roles, for a smart-community gate system."
     ),
-    version="7.1.0",
+    version="7.2.0",
 )
 app.include_router(auth.router)
 app.include_router(rfid.router)

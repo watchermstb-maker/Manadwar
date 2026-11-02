@@ -149,6 +149,16 @@
     font-weight: 600; font-size: 0.9rem; text-decoration: none;
   }
   a.wa-btn:hover { background: var(--granted); color: #0b1620; }
+  .scan-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .scan-actions .action { margin-top: 0; }
+  label.photo-btn {
+    display: inline-block; background: var(--well); border: 1px solid var(--border); color: var(--text);
+    padding: 10px 18px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.9rem;
+  }
+  label.photo-btn:hover { background: var(--border); }
+  .scan-view { position: relative; max-width: 360px; margin-top: 12px; border-radius: 8px; overflow: hidden; background: #000; line-height: 0; }
+  .scan-view video { width: 100%; display: block; }
+  .scan-frame { position: absolute; inset: 15%; border: 3px solid var(--granted); border-radius: 10px; pointer-events: none; }
   .share-box { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
   .qr-box { background: #fff; padding: 6px; border-radius: 6px; display: inline-block; max-width: 100%; margin-top: 12px; line-height: 0; }
   .qr-box svg { display: block; max-width: 100%; height: auto; }
@@ -490,6 +500,18 @@
       </div>
 
       <div class="panel active" id="vpanel-verify">
+        <h3 class="section-title" style="margin-bottom:4px;">Scan the visitor's QR code</h3>
+        <div class="scan-actions">
+          <button class="action" id="btn-scan-start">Scan QR code</button>
+          <button class="action secondary hidden" id="btn-scan-stop">Stop camera</button>
+          <label class="photo-btn" for="qr-photo">Take photo of QR</label>
+          <input type="file" id="qr-photo" accept="image/*" capture="environment" class="hidden" />
+        </div>
+        <div class="scan-view hidden" id="scan-view"><video id="scan-video" playsinline muted></video><div class="scan-frame"></div></div>
+        <p class="note-text" id="scan-note" style="margin-top:8px;">Hold the visitor's QR in front of the camera. If live scanning isn't available on this device, use <strong>Take photo of QR</strong>.</p>
+
+        <h3 class="section-title" style="margin:22px 0 0;">Or type the OTP</h3>
+        <p class="note-text" style="margin:4px 0 0;">Failsafe for when the camera or the phone screen isn't working.</p>
         <label for="otp-input">OTP code</label>
         <input type="text" id="otp-input" placeholder="6-digit code" />
 
@@ -794,6 +816,7 @@
 </div>
 
 <script src="/app/qrcode-lib.js"></script>
+<script src="/app/jsqr-lib.js"></script>
 <script>
 (function () {
   "use strict";
@@ -1095,12 +1118,7 @@
   });
 
   // ---- Visitor tab: verify OTP
-  $("btn-verify-otp").addEventListener("click", async function () {
-    const code = $("otp-input").value.trim();
-    if (!code) {
-      setStatus("denied", "NO OTP", "Enter the OTP code first.");
-      return;
-    }
+  async function verifyOtpCode(code) {
     setStatus("idle", "CHECKING...", "");
     const result = await postJSON("/verify-otp", { otp_code: code, gate_name: "MAIN_GATE", direction: "IN" });
     if (!result.ok) {
@@ -1113,7 +1131,146 @@
     } else {
       setStatus("denied", "ACCESS DENIED", data.message || "");
     }
+  }
+
+  $("btn-verify-otp").addEventListener("click", async function () {
+    const code = $("otp-input").value.trim();
+    if (!code) {
+      setStatus("denied", "NO OTP", "Enter the OTP code first.");
+      return;
+    }
+    await verifyOtpCode(code);
   });
+
+  // ---- QR scanning (v7.2): the visitor's QR carries the same OTP, so a scan
+  // runs exactly the same check as typing it. Camera frames are decoded in
+  // this browser and never uploaded.
+  const SCAN_COOLDOWN_MS = 5000;   // the same pass held in front of the camera is counted once
+  let scanStream = null, scanRunning = false, scanBusy = false;
+  let lastScan = { text: "", at: 0 };
+  const scanCanvas = document.createElement("canvas");
+  const scanCtx = scanCanvas.getContext("2d", { willReadFrequently: true });
+
+  // Our passes are "ManaDwar Visitor Pass ... OTP: 123456 ..."; a bare
+  // 6-digit QR is accepted too. Anything else is not ours.
+  function otpFromQr(text) {
+    const t = String(text || "").trim();
+    if (/^\d{6}$/.test(t)) return t;
+    if (!/^ManaDwar Visitor Pass/i.test(t)) return null;
+    const m = /(?:^|\n)\s*OTP:\s*(\d{6})\s*(?:\n|$)/i.exec(t);
+    return m ? m[1] : null;
+  }
+
+  async function handleScanned(text, fromPhoto) {
+    const now = Date.now();
+    if (!fromPhoto && text === lastScan.text && now - lastScan.at < SCAN_COOLDOWN_MS) return;
+    lastScan = { text: text, at: now };
+    const otp = otpFromQr(text);
+    if (!otp) {
+      setStatus("denied", "ACCESS DENIED", "Not a ManaDwar visitor pass.");
+      return;
+    }
+    scanBusy = true;
+    try { await verifyOtpCode(otp); } finally { scanBusy = false; lastScan.at = Date.now(); }
+  }
+
+  function decodeFrom(source, sw, sh, maxWidth, both) {
+    const w = Math.min(maxWidth, sw), h = Math.max(1, Math.round(sh * w / sw));
+    scanCanvas.width = w; scanCanvas.height = h;
+    scanCtx.drawImage(source, 0, 0, w, h);
+    const img = scanCtx.getImageData(0, 0, w, h);
+    const code = jsQR(img.data, w, h, { inversionAttempts: both ? "attemptBoth" : "dontInvert" });
+    return code && code.data ? code.data : null;
+  }
+
+  function scanTick() {
+    if (!scanRunning) return;
+    const v = $("scan-video");
+    if (v.readyState >= 2 && v.videoWidth && !scanBusy) {
+      const text = decodeFrom(v, v.videoWidth, v.videoHeight, 640, false);
+      if (text) handleScanned(text, false);
+    }
+    setTimeout(scanTick, 120);
+  }
+
+  function stopScan() {
+    scanRunning = false;
+    if (scanStream) { scanStream.getTracks().forEach(function (t) { t.stop(); }); scanStream = null; }
+    $("scan-video").srcObject = null;
+    $("scan-view").classList.add("hidden");
+    $("btn-scan-stop").classList.add("hidden");
+    $("btn-scan-start").classList.remove("hidden");
+  }
+
+  async function startScan() {
+    const note = $("scan-note");
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.isSecureContext) {
+      note.textContent = "Live camera isn't available on this connection (browsers only allow it on localhost or HTTPS). Use 'Take photo of QR' instead, or type the OTP.";
+      return;
+    }
+    try {
+      scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+    } catch (e) {
+      note.textContent = (e && e.name === "NotAllowedError")
+        ? "Camera permission is blocked. Allow it in the browser, or use 'Take photo of QR', or type the OTP."
+        : "No camera could be started. Use 'Take photo of QR' instead, or type the OTP.";
+      return;
+    }
+    const video = $("scan-video");
+    video.srcObject = scanStream;
+    try { await video.play(); } catch (e) { /* autoplay quirks: frames still arrive */ }
+    $("scan-view").classList.remove("hidden");
+    $("btn-scan-start").classList.add("hidden");
+    $("btn-scan-stop").classList.remove("hidden");
+    note.textContent = "Camera on. Hold the visitor's QR inside the frame; the result shows in the screen above.";
+    lastScan = { text: "", at: 0 };
+    scanRunning = true;
+    scanTick();
+  }
+
+  function loadImageFile(file) {
+    return new Promise(function (resolve, reject) {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = function () { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error("bad image")); };
+      img.src = url;
+    });
+  }
+
+  $("btn-scan-start").addEventListener("click", startScan);
+  $("btn-scan-stop").addEventListener("click", function () {
+    stopScan();
+    $("scan-note").textContent = "Camera off.";
+  });
+
+  $("qr-photo").addEventListener("change", async function () {
+    const input = this;
+    const file = input.files && input.files[0];
+    if (!file) return;
+    setStatus("idle", "READING PHOTO...", "");
+    let text = null;
+    try {
+      const img = await loadImageFile(file);
+      const sw = img.naturalWidth || img.width, sh = img.naturalHeight || img.height;
+      const widths = [1280, 800, 480];
+      for (let i = 0; i < widths.length && !text; i++) text = decodeFrom(img, sw, sh, widths[i], true);
+    } catch (e) {
+      setStatus("denied", "UNREADABLE PHOTO", "That file couldn't be opened as a picture. Try again, or type the OTP.");
+      input.value = "";
+      return;
+    }
+    input.value = "";   // so taking the same photo again still fires
+    if (!text) {
+      setStatus("denied", "NO QR FOUND", "Move closer so the QR fills the photo and try again, or type the OTP.");
+      return;
+    }
+    await handleScanned(text, true);
+  });
+
+  // The camera only runs while the Verify OTP screen is in front.
+  [$("vtab-register"), $("tab-vehicle"), $("tab-delivery"), $("tab-staff")].forEach(function (b) { b.addEventListener("click", stopScan); });
+  document.addEventListener("visibilitychange", function () { if (document.hidden) stopScan(); });
 
   // ---- Visitor tab: register visitor (guard/admin, on behalf of any host)
   const visitTypeSelect = $("reg-visit-type");
@@ -1738,7 +1895,7 @@
       : '<div class="note-text" style="margin:0;">WhatsApp can\'t be opened because "' + esc(v.phone) + '" doesn\'t look like a full phone number. Share the OTP another way.</div>';
     return '<div class="share-box">' + wa +
       '<div class="qr-wrap"><div class="qr-box" id="rp-v-qr"></div>' +
-      '<div class="note-text" style="margin:6px 0 0;">Visitor pass QR: show it on your screen or take a screenshot to share. (WhatsApp links can only carry text, so the QR is not attached to the message.)</div></div></div>';
+      '<div class="note-text" style="margin:6px 0 0;">Visitor pass QR: the guard can scan this at the gate instead of typing the OTP. Show it on your screen or take a screenshot to share. (WhatsApp links can only carry text, so the QR is not attached to the message.)</div></div></div>';
   }
 
   // Draws the QR as a crisp SVG from the library's own module grid. Nothing
