@@ -1,0 +1,8 @@
+venv/
+.env
+*.db
+__pycache__/
+uploads/
+certs/
+backups/
+.dev_secret
