@@ -233,3 +233,4 @@ manadwar-backend/
 | v6.2 | Complaint photos (uploads folder), startup schema check |
 | v6.2.1 | Fix: long-term visitor registration from the browser (timezone-aware dates) |
 | v7.0 | Delivery redesign: residents announce, guard matches, resident approves unexpected couriers, admin overview |
+| v7.0.1 | Phone fix: wide tables scroll sideways inside their card so action buttons are never cut off |

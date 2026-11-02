@@ -185,6 +185,10 @@
     margin-top: 12px;
     font-size: 0.82rem;
   }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 12px; }
+  .table-wrap table { margin-top: 0; min-width: 560px; }
+  .table-wrap td, .table-wrap th { vertical-align: top; }
+  .row-actions button { white-space: nowrap; }
   th, td {
     border-bottom: 1px solid var(--border);
     padding: 8px 6px;
@@ -366,10 +370,10 @@
         <div class="inline-result hidden" id="rp-v-result"></div>
 
         <h3 class="section-title" style="margin-top:24px;">My Visitors</h3>
-        <table>
+        <div class="table-wrap"><table>
           <thead><tr><th>#</th><th>Name</th><th>Type</th><th>OTP</th><th>Valid until</th><th>Last entry</th><th>Status</th></tr></thead>
           <tbody id="rp-v-body"><tr class="empty-row"><td colspan="7">Loading...</td></tr></tbody>
-        </table>
+        </table></div>
       </div>
 
       <!-- Deliveries -->
@@ -411,10 +415,10 @@
 
         <h3 class="section-title" style="margin-top:24px;">My Deliveries</h3>
         <button class="action secondary" id="rp-d-refresh" style="margin-top:0;margin-bottom:10px;">Refresh</button>
-        <table>
+        <div class="table-wrap"><table>
           <thead><tr><th>#</th><th>Platform</th><th>When</th><th>Status</th><th>Action</th></tr></thead>
           <tbody id="rp-d-body"><tr class="empty-row"><td colspan="5">Loading...</td></tr></tbody>
-        </table>
+        </table></div>
       </div>
 
       <!-- Complaints -->
@@ -430,10 +434,10 @@
         <div class="inline-result hidden" id="rp-c-result"></div>
 
         <h3 class="section-title" style="margin-top:24px;">My Complaints</h3>
-        <table>
+        <div class="table-wrap"><table>
           <thead><tr><th>#</th><th>Category</th><th>Description</th><th>Photo</th><th>Status</th><th>Admin notes</th></tr></thead>
           <tbody id="rp-c-body"><tr class="empty-row"><td colspan="6">Loading...</td></tr></tbody>
-        </table>
+        </table></div>
       </div>
     </div>
   </div>
@@ -555,14 +559,14 @@
         <input type="text" id="del-search" placeholder="Search platform, resident or flat number..." />
         <button class="action secondary" id="btn-refresh-deliveries" style="margin:0;">Refresh</button>
       </div>
-      <table>
+      <div class="table-wrap"><table>
         <thead>
           <tr><th>Platform</th><th>Resident</th><th>When</th><th>Status</th><th>Action</th></tr>
         </thead>
         <tbody id="del-open-body">
           <tr class="empty-row"><td colspan="5">Loading...</td></tr>
         </tbody>
-      </table>
+      </table></div>
 
       <h3 class="section-title" style="margin-top:26px;">Unexpected arrival</h3>
       <p class="note-text">Courier at the gate and nobody announced it? Log it here. The resident gets an approve / deny request.</p>
@@ -638,14 +642,14 @@
       </select>
     </div>
     <div class="note-text" id="delh-count" style="margin:10px 0 0;"></div>
-    <table>
+    <div class="table-wrap"><table>
       <thead>
         <tr><th>#</th><th>Resident</th><th>Platform / courier</th><th>Type</th><th>When</th><th>Status</th><th>Action</th></tr>
       </thead>
       <tbody id="delh-body">
         <tr class="empty-row"><td colspan="7">Loading...</td></tr>
       </tbody>
-    </table>
+    </table></div>
   </div>
 
   <!-- ===================== COMPLAINTS CARD (admin only) ===================== -->
@@ -684,14 +688,14 @@
       <select id="comp-filter-category"></select>
     </div>
     <div class="note-text" id="comp-count" style="margin:10px 0 0;"></div>
-    <table>
+    <div class="table-wrap"><table>
       <thead>
         <tr><th>#</th><th>Resident</th><th>Category</th><th>Description</th><th>Photo</th><th>Status</th><th>Raised</th><th>Action</th></tr>
       </thead>
       <tbody id="complaints-body">
         <tr class="empty-row"><td colspan="8">No complaints yet.</td></tr>
       </tbody>
-    </table>
+    </table></div>
   </div>
 
   <!-- ===================== STAFF DIRECTORY CARD ===================== -->
@@ -759,14 +763,14 @@
       </select>
     </div>
     <div class="note-text" id="staff-count" style="margin:10px 0 0;"></div>
-    <table>
+    <div class="table-wrap"><table>
       <thead>
         <tr><th>#</th><th>Name</th><th>Role</th><th>Employed by</th><th>Aadhaar</th><th>Credential</th><th>Status</th><th>Action</th></tr>
       </thead>
       <tbody id="staff-body">
         <tr class="empty-row"><td colspan="8">No staff registered yet.</td></tr>
       </tbody>
-    </table>
+    </table></div>
   </div>
 
   </div><!-- /staff-view -->
